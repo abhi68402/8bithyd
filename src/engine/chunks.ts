@@ -9,6 +9,7 @@ import { TILE, TX, TY, CELL, GW, GH, CITY_W, CITY_H, ROAD_W,
   A_WATER, A_PARK, A_FOREST, A_GRASS, A_FARM, A_RES, A_COM, A_IND, A_MIL, A_ROCK, A_SCRUB, A_PITCH, A_APRON, A_CEMETERY, A_ISLAND, A_RAILYARD, A_QUARRY,
   B_HOUSE, B_APART, B_COMMERCIAL, B_INDUSTRIAL, B_RELIGIOUS, B_CIVIC, B_SHED, B_GLASS } from '../world/geo';
 import type { City, Tile, Place } from '../world/city';
+import { tileInfo, ZONE_COL } from '../world/query';
 import { hash2 } from '../world/rng';
 import { mkCanvas, shade } from '../art/paint';
 import { spriteFor } from '../art/sprites';
@@ -42,6 +43,7 @@ PALS[B_SHED] = pal(['#a8a39a', '#b3ada3'], ['#9aa0a6', '#b0a898']);
 PALS[B_GLASS] = pal(['#6fb7d6', '#5aa0c8', '#7fc9c0', '#8fb0d8', '#4f8fb5', '#6fc0a8'], ['#dfe6ea', '#cfd8dc']);
 
 let noisePat: CanvasPattern | null = null, winPat: CanvasPattern | null = null, bandPat: CanvasPattern | null = null;
+let winPatH: CanvasPattern | null = null, bandPatH: CanvasPattern | null = null;
 let litPat: CanvasPattern | null = null, litCool: CanvasPattern | null = null, farmPat: CanvasPattern | null = null;
 let treeSheet: HTMLCanvasElement | null = null;
 const TREE_N = 8, TREE_W = 11, TREE_H = 14;
@@ -55,6 +57,19 @@ function initPatterns(ctx: Ctx) {
   farmPat = mk(8, 6, (c) => { c.fillStyle = 'rgba(70,90,30,0.16)'; c.fillRect(0, 0, 8, 1); c.fillRect(0, 3, 8, 1); });
   winPat = mk(4, 5, (c) => { c.fillStyle = 'rgba(44,58,82,0.78)'; c.fillRect(1, 1, 2, 2); });
   bandPat = mk(4, 4, (c) => { c.fillStyle = 'rgba(20,50,80,0.38)'; c.fillRect(0, 0, 4, 1); c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(0, 2, 1, 2); });
+  // close-up versions at two art pixels per metre: a pane, a glint and a sill
+  const half = (p: CanvasPattern) => { p.setTransform(new DOMMatrix().scale(0.5)); return p; };
+  winPatH = half(mk(8, 10, (c) => {
+    c.fillStyle = 'rgba(40,54,80,0.84)'; c.fillRect(2, 2, 4, 5);
+    c.fillStyle = 'rgba(150,196,230,0.55)'; c.fillRect(2, 2, 2, 1); c.fillRect(2, 3, 1, 1);
+    c.fillStyle = 'rgba(30,20,10,0.16)'; c.fillRect(1, 7, 6, 1);
+    c.fillStyle = 'rgba(255,255,255,0.10)'; c.fillRect(0, 9, 8, 1);
+  }));
+  bandPatH = half(mk(8, 8, (c) => {
+    c.fillStyle = 'rgba(20,50,80,0.40)'; c.fillRect(0, 0, 8, 2);
+    c.fillStyle = 'rgba(255,255,255,0.16)'; c.fillRect(0, 2, 8, 1); c.fillRect(0, 3, 1, 5);
+    c.fillStyle = 'rgba(255,255,255,0.07)'; c.fillRect(3, 4, 2, 3);
+  }));
   const lit = (cols: string[], p: number) => mk(32, 40, (c) => {
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) if (hash2(x, y, 77) < p) { c.fillStyle = cols[(hash2(x, y, 78) * cols.length) | 0]; c.fillRect(x * 4 + 1, y * 5 + 1, 2, 2); }
   });
@@ -120,7 +135,13 @@ export interface DetailChunk {
   li: number; lei: number; // lights progress
   extras: Extra[];
   used: number;
+  // close-up layers at HI art pixels per metre, baked only when zoomed right in
+  hg: HTMLCanvasElement | null;
+  hs: HTMLCanvasElement | null; hctx: Ctx | null;
+  hbi: number; hei: number; hused: number;
 }
+/** Art pixels per metre of the close-up layers. */
+export const HI = 2;
 export interface CoarseChunk { cx: number; cy: number; c: HTMLCanvasElement; l: HTMLCanvasElement; used: number }
 
 export const COARSE = 2048;
@@ -156,8 +177,8 @@ export class Chunks {
     let ready = true;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (this.city.tile(tx + dx, ty + dy) === null) ready = false;
     if (!ready || !this.timeLeft()) return null;
-    c = { tx, ty, key, tile, g: null, s: null, sx: 0, sy: 0, sctx: null, l: null, lctx: null, bi: 0, ei: 0, li: 0, lei: 0, extras: this.extras(tile), used: this.frame };
-    this.bakeGround(c);
+    c = { tx, ty, key, tile, g: null, s: null, sx: 0, sy: 0, sctx: null, l: null, lctx: null, bi: 0, ei: 0, li: 0, lei: 0, extras: this.extras(tile), used: this.frame, hg: null, hs: null, hctx: null, hbi: 0, hei: 0, hused: 0 };
+    c.g = this.paintGround(c, 1);
     this.detail.set(key, c);
     return c;
   }
@@ -186,18 +207,19 @@ export class Chunks {
     return out.sort((a, b) => a.y - b.y);
   }
 
-  private bakeGround(c: DetailChunk) {
+  /** Ground of one tile at S art pixels per metre. */
+  private paintGround(c: DetailChunk, S: number): HTMLCanvasElement {
     this.bakes++;
     const city = this.city;
-    const cv = mkCanvas(TILE, TILE / 2);
+    const cv = mkCanvas(TILE * S, (TILE / 2) * S);
     const ctx = cv.getContext('2d')!;
     const ox = c.tx * TILE, oy = c.ty * TILE;
-    ctx.setTransform(1, 0, 0, 0.5, -ox, -oy * 0.5);
+    ctx.setTransform(S, 0, 0, 0.5 * S, -ox * S, -oy * 0.5 * S);
     paintLand(ctx, city, ox, oy, ox + TILE, oy + TILE, true);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = noisePat!;
-    ctx.fillRect(0, 0, TILE, TILE / 2);
-    ctx.setTransform(1, 0, 0, 0.5, -ox, -oy * 0.5);
+    ctx.fillRect(0, 0, TILE * S, (TILE / 2) * S);
+    ctx.setTransform(S, 0, 0, 0.5 * S, -ox * S, -oy * 0.5 * S);
     // railways
     ctx.lineCap = 'butt';
     for (const pass of [0, 1]) {
@@ -233,10 +255,12 @@ export class Chunks {
       ctx.lineWidth = w; ctx.strokeStyle = col; ctx.stroke();
     };
     for (let k = 6; k >= 0; k--) stroke(byClass[k], ROAD_W[k] + 2.6, '#b3a998');
+    if (S > 1) for (let k = 6; k >= 0; k--) stroke(byClass[k], ROAD_W[k] + 0.7, '#3c3b44'); // kerb shadow
     for (let k = 6; k >= 0; k--) stroke(byClass[k], ROAD_W[k], ASPHALT[k]);
-    for (let k = 3; k >= 0; k--) stroke(byClass[k], 0.8, '#d8b84a');
+    for (let k = 3; k >= 0; k--) stroke(byClass[k], S > 1 ? 0.45 : 0.8, '#d8b84a');
     ctx.setLineDash([5, 7]);
-    stroke(byClass[4], 0.7, '#cfcab8');
+    stroke(byClass[4], S > 1 ? 0.4 : 0.7, '#cfcab8');
+    if (S > 1) { ctx.setLineDash([3, 6]); stroke(byClass[5], 0.3, 'rgba(225,220,205,0.5)'); }
     ctx.setLineDash([]);
     for (const [k, p] of bridges) stroke([p], ROAD_W[k] + 4, '#d6d0c2');
     for (const [k, p] of bridges) stroke([p], ROAD_W[k], ASPHALT[k]);
@@ -245,10 +269,10 @@ export class Chunks {
     for (const m of city.metro) stroke([m.p], 7, 'rgba(30,24,40,0.2)');
     // runways
     for (const r of city.runways) { stroke([r], 58, '#4f5057'); ctx.setLineDash([30, 30]); stroke([r], 2, '#e8e4d0'); ctx.setLineDash([]); }
-    c.g = cv;
+    return cv;
   }
 
-  private structCanvas(c: DetailChunk): [HTMLCanvasElement, number, number] {
+  private structCanvas(c: DetailChunk, S = 1): [HTMLCanvasElement, number, number] {
     let x0 = c.tx * TILE - 40, x1 = (c.tx + 1) * TILE + 40;
     let y0 = (c.ty * TILE) / 2 - c.tile.maxH - 16, y1 = ((c.ty + 1) * TILE) / 2 + 12;
     for (const e of c.extras) {
@@ -259,7 +283,7 @@ export class Chunks {
       y0 = Math.min(y0, p.y / 2 - ay * s - 2); y1 = Math.max(y1, p.y / 2 + (sp.c.height - ay) * s + 2);
     }
     x0 = Math.floor(x0); y0 = Math.floor(y0);
-    return [mkCanvas(Math.ceil(x1 - x0), Math.ceil(y1 - y0)), x0, y0];
+    return [mkCanvas(Math.ceil(x1 - x0) * S, Math.ceil(y1 - y0) * S), x0, y0];
   }
 
   private drawExtra(ctx: Ctx, e: Extra, ox: number, oy: number, lights: boolean) {
@@ -275,7 +299,7 @@ export class Chunks {
     ctx.drawImage(src, Math.round(p.x - ox - ax * s), Math.round(p.y / 2 - oy - ay * s), sp.c.width * s, sp.c.height * s);
   }
 
-  private drawBuilding(ctx: Ctx, t: Tile, i: number, ox: number, oy: number, lights: boolean) {
+  private drawBuilding(ctx: Ctx, t: Tile, i: number, ox: number, oy: number, lights: boolean, hi = false) {
     const n = t.bN[i], h = t.bH[i], kind = t.bKind[i], off = t.bOff[i], v = t.verts;
     const hv = hash2(i, t.key, 3);
     const set = PALS[kind] ?? PALS[0];
@@ -297,8 +321,8 @@ export class Chunks {
       const sl = (by - ay) / -dx;
       ctx.fillStyle = sl > 0.22 ? pl[3] : sl < -0.22 ? pl[1] : pl[2];
       ctx.fill();
-      if (kind === B_GLASS) { ctx.fillStyle = bandPat!; ctx.fill(); }
-      else if (h >= 9 && dx < -4 && kind !== B_INDUSTRIAL && kind !== B_SHED) { ctx.fillStyle = winPat!; ctx.fill(); }
+      if (kind === B_GLASS) { ctx.fillStyle = hi ? bandPatH! : bandPat!; ctx.fill(); }
+      else if (h >= (hi ? 6 : 9) && dx < (hi ? -3 : -4) && kind !== B_INDUSTRIAL && kind !== B_SHED) { ctx.fillStyle = hi ? winPatH! : winPat!; ctx.fill(); }
     }
     cx /= n; cy /= n;
     if (lights) {
@@ -313,12 +337,22 @@ export class Chunks {
     ctx.fillStyle = pl[0];
     ctx.fill();
     const w = maxX - minX;
+    if (hi) {
+      // parapet line, and the rooftop clutter every Hyderabad terrace has
+      ctx.lineWidth = 0.5; ctx.strokeStyle = shade(pl[0], 0.8); ctx.stroke();
+      if (w > 6 && kind !== B_INDUSTRIAL && kind !== B_SHED && kind !== B_RELIGIOUS) {
+        const tx = Math.round((cx + (hv - 0.5) * w * 0.4) * 2) / 2, ty = Math.round((cy - h) * 2) / 2;
+        if (hv < 0.62) { ctx.fillStyle = '#1e1e24'; ctx.fillRect(tx, ty - 0.5, 1.5, 1.5); ctx.fillStyle = '#50505c'; ctx.fillRect(tx, ty - 0.5, 1.5, 0.5); }
+        if (w > 11 && hv > 0.3) { ctx.fillStyle = shade(pl[0], 1.06); ctx.fillRect(tx - 3.5, ty - 1.5, 2.5, 2); ctx.fillStyle = shade(pl[0], 0.72); ctx.fillRect(tx - 3.5, ty + 0.5, 2.5, 0.5); }
+        if (kind === B_GLASS || h > 30) { ctx.fillStyle = '#9aa4ac'; ctx.fillRect(tx + 2.5, ty - 1, 2, 1.5); ctx.fillStyle = '#6c757c'; ctx.fillRect(tx + 2.5, ty + 0.5, 2, 0.5); }
+      }
+    }
     if (kind === B_RELIGIOUS && w > 7) {
       const r = Math.min(7, w * 0.22);
       ctx.fillStyle = hv < 0.5 ? '#5fa48a' : '#f6f4ee';
       ctx.beginPath(); ctx.arc(cx, cy - h, r, Math.PI, 0); ctx.fill();
       ctx.fillStyle = '#d9b24a'; ctx.fillRect(Math.round(cx), Math.round(cy - h - r - 2), 1, 2);
-    } else if (w > 9 && hv < 0.45 && kind !== B_INDUSTRIAL) {
+    } else if (!hi && w > 9 && hv < 0.45 && kind !== B_INDUSTRIAL) {
       ctx.fillStyle = hv < 0.2 ? '#3a3a44' : shade(pl[0], 0.86);
       ctx.fillRect(Math.round(cx + (hv - 0.2) * w * 0.6), Math.round(cy - h - 1), 2, 2);
     }
@@ -342,6 +376,63 @@ export class Chunks {
     }
   }
   structsDone(c: DetailChunk) { return c.bi >= c.tile.nb && c.ei >= c.extras.length; }
+
+  /**
+   * Advance the close-up layers of a chunk. The ground is one big paint, so it
+   * only happens while the view is `still`; buildings go in time-boxed slices.
+   */
+  bakeHi(c: DetailChunk, still: boolean): void {
+    c.hused = this.frame;
+    if (!this.timeLeft()) return;
+    if (!c.hg) { if (still) c.hg = this.paintGround(c, HI); return; }
+    const t = c.tile;
+    if (c.hbi >= t.nb && c.hei >= c.extras.length) return;
+    if (!c.hs) {
+      c.hs = this.structCanvas(c, HI)[0];
+      c.hctx = c.hs.getContext('2d')!;
+      c.hctx.scale(HI, HI);
+      this.bakes++;
+    }
+    const ctx = c.hctx!;
+    for (let guard = 0; ; guard++) {
+      const nextB = c.hbi < t.nb ? t.bMaxY[c.hbi] : Infinity;
+      const nextE = c.hei < c.extras.length ? c.extras[c.hei].y : Infinity;
+      if (nextB === Infinity && nextE === Infinity) { c.hctx = null; break; }
+      if (nextE <= nextB) this.drawExtra(ctx, c.extras[c.hei++], c.sx, c.sy, false);
+      else this.drawBuilding(ctx, t, c.hbi++, c.sx, c.sy, false, true);
+      if ((guard & 15) === 15 && !this.timeLeft()) break;
+    }
+  }
+  hiDone(c: DetailChunk) { return !!c.hs && c.hbi >= c.tile.nb && c.hei >= c.extras.length; }
+  private dropHi(c: DetailChunk) {
+    for (const cv of [c.hg, c.hs]) if (cv) { cv.width = 0; cv.height = 0; }
+    c.hg = c.hs = c.hctx = null; c.hbi = c.hei = 0;
+  }
+  /** Keep at most `cap` chunks' close-up layers, most recently used first. */
+  evictHi(cap: number) {
+    const all: DetailChunk[] = [];
+    for (const c of this.detail.values()) if (c.hg || c.hs) all.push(c);
+    if (all.length <= cap) return;
+    all.sort((a, b) => a.hused - b.hused);
+    for (let i = 0; i < all.length - cap; i++) this.dropHi(all[i]);
+  }
+
+  /** Footprints of a tile grouped by zone, in world pixels, for the zones view. */
+  zonePaths(t: Tile): Path2D[] {
+    let p = this.zoneCache.get(t);
+    if (p) return p;
+    p = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
+    const zone = tileInfo(this.city, t).zone, v = t.verts;
+    for (let i = 0; i < t.nb; i++) {
+      const off = t.bOff[i], n = t.bN[i], path = p[zone[i]];
+      path.moveTo(v[off], v[off + 1] / 2);
+      for (let k = 1; k < n; k++) path.lineTo(v[off + k * 2], v[off + k * 2 + 1] / 2);
+      path.closePath();
+    }
+    this.zoneCache.set(t, p);
+    return p;
+  }
+  private zoneCache = new WeakMap<Tile, Path2D[]>();
 
   bakeLights(c: DetailChunk): void {
     const t = c.tile;
@@ -372,7 +463,7 @@ export class Chunks {
   private dropDetail(key: number) {
     const c = this.detail.get(key);
     if (!c) return;
-    for (const cv of [c.g, c.s, c.l]) if (cv) { cv.width = 0; cv.height = 0; }
+    for (const cv of [c.g, c.s, c.l, c.hg, c.hs]) if (cv) { cv.width = 0; cv.height = 0; }
     this.detail.delete(key);
   }
 
@@ -509,7 +600,7 @@ export class Chunks {
   // ------------------------------------------------------------ overlay rasters
   private rasters = new Map<string, HTMLCanvasElement>();
   /** Pre-rendered data map (density or land use) covering the whole city. */
-  raster(mode: 'density' | 'landuse'): HTMLCanvasElement {
+  raster(mode: 'density' | 'landuse' | 'zones'): HTMLCanvasElement {
     let cv = this.rasters.get(mode);
     if (cv) return cv;
     if (mode === 'density') {
@@ -532,7 +623,7 @@ export class Chunks {
       const ctx = cv.getContext('2d')!;
       ctx.setTransform(1 / OV_S, 0, 0, 0.5 / OV_S, 0, 0);
       for (const a of this.city.areas) {
-        const col = LANDUSE_COL[a.kind];
+        const col = mode === 'zones' ? (a.kind === A_RES ? ZONE_COL[0] : a.kind === A_COM ? ZONE_COL[1] : a.kind === A_IND ? ZONE_COL[2] : undefined) : LANDUSE_COL[a.kind];
         if (!col) continue;
         ctx.beginPath(); polyPath(ctx, a.p); ctx.closePath();
         ctx.fillStyle = col; ctx.fill();

@@ -10,7 +10,12 @@ import { Sim } from './sim/sim';
 import { Live } from './sim/live';
 import { Events } from './sim/events';
 import { UI } from './ui/ui';
+import { CityTools, addZonesButton } from './ui/tools';
 import { buildSheets } from './art/actors';
+import { startBootScreen } from './ui/boot';
+import { t, onLang } from './ui/i18n';
+
+const bootReady = startBootScreen();
 
 const $ = (id: string) => document.getElementById(id)!;
 const frame = () => new Promise<void>((r) => setTimeout(r, 0));
@@ -19,6 +24,10 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   const debug = params.has('debug');
   const msg = $('bootMsg'), bar = $('bootBar');
+  let said: [string, Record<string, string | number>?] = ['boot.unroll'];
+  const say = (key: string, vars?: Record<string, string | number>) => { said = [key, vars]; msg.textContent = t(key, vars); };
+  onLang(() => { if (msg.isConnected) say(...said); });
+  say('boot.unroll');
   const t0 = performance.now();
   const fonts = Promise.race([
     Promise.all([document.fonts.load('8px Silkscreen'), document.fonts.load('700 16px Silkscreen')]),
@@ -28,14 +37,14 @@ async function boot() {
   const tLoad = performance.now() - t0;
   await fonts;
   bar.style.width = '25%';
-  msg.textContent = `Drawing ${city.buildings.toLocaleString('en-IN')} buildings...`;
+  say('boot.drawing', { n: city.buildings.toLocaleString('en-IN') });
   await frame();
 
   const chunks = new Chunks(city);
   await chunks.buildOverview((f) => { bar.style.width = `${Math.round(25 + f * 75)}%`; });
   const tOverview = performance.now() - t0 - tLoad;
   const sheets = buildSheets(city.metro.map((l) => l.color));
-  msg.textContent = 'Waking everyone up...';
+  say('boot.waking');
 
   const sim = new Sim(city);
   const live = new Live(sim);
@@ -46,7 +55,12 @@ async function boot() {
   cam.attach(canvas);
   live.set(!params.has('game'));
   live.tick();
+  addZonesButton();
   const ui = new UI(city, sim, cam, renderer, chunks, live, events);
+  // city tools: after the HUD has had its turn at a tap, try the building under it
+  const tools = new CityTools(city, sim, cam, renderer);
+  const hudTap = cam.onTap;
+  cam.onTap = (wx, wy) => { hudTap(wx, wy); tools.tap(wx, wy); };
   window.addEventListener('resize', () => renderer.resize());
   const start = city.places[0];
   if (!ui.fromHash()) {
@@ -79,6 +93,7 @@ async function boot() {
     sim.update(dt, live.on);
     events.update(dt);
     ui.update(dt);
+    tools.update(dt);
     renderer.draw();
     const work = performance.now() - w0;
     if (stats.record) stats.samples.push(raw, work);
@@ -95,10 +110,13 @@ async function boot() {
     }
   };
   requestAnimationFrame(loop);
+  say('boot.ready');
+  bar.style.width = '100%';
+  await bootReady();
   $('boot').classList.add('done');
   setTimeout(() => $('boot').remove(), 600);
   setTimeout(() => $('hint').classList.add('gone'), 9000);
-  (window as unknown as Record<string, unknown>).__hd = { city, chunks, sim, cam, renderer, ui, live, events, stats, bootMs, tLoad, tOverview };
+  (window as unknown as Record<string, unknown>).__hd = { city, chunks, sim, cam, renderer, ui, tools, live, events, stats, bootMs, tLoad, tOverview };
 }
 
 boot().catch((e) => {

@@ -13,6 +13,8 @@ export interface Tile {
   tx: number; ty: number; key: number;
   nb: number;
   bN: Uint8Array; bH: Uint8Array; bKind: Uint8Array; bOff: Uint32Array; bMaxY: Float32Array;
+  /** 1 where the footprint was generated to fill a gap in the map data. */
+  bGen: Uint8Array;
   verts: Float32Array; // absolute city metres
   maxH: number;
   roads: Road[];
@@ -42,12 +44,12 @@ export function decodeTile(buf: ArrayBuffer, tx: number, ty: number): Tile {
   const dv = new DataView(buf);
   const nb = dv.getUint32(0, true), nr = dv.getUint32(4, true);
   const ox = tx * TILE, oy = ty * TILE;
-  const bN = new Uint8Array(nb), bH = new Uint8Array(nb), bKind = new Uint8Array(nb), bOff = new Uint32Array(nb), bMaxY = new Float32Array(nb);
+  const bN = new Uint8Array(nb), bH = new Uint8Array(nb), bKind = new Uint8Array(nb), bGen = new Uint8Array(nb), bOff = new Uint32Array(nb), bMaxY = new Float32Array(nb);
   const verts: number[] = [];
   let o = 8, maxH = 0;
   for (let i = 0; i < nb; i++) {
     const n = dv.getUint8(o), h = dv.getUint8(o + 1);
-    bN[i] = n; bH[i] = h; bKind[i] = dv.getUint8(o + 2) & 63; bOff[i] = verts.length;
+    bN[i] = n; bH[i] = h; bKind[i] = dv.getUint8(o + 2) & 63; bGen[i] = dv.getUint8(o + 2) >> 6 & 1; bOff[i] = verts.length;
     if (h > maxH) maxH = h;
     o += 3;
     let my = -Infinity;
@@ -68,7 +70,7 @@ export function decodeTile(buf: ArrayBuffer, tx: number, ty: number): Tile {
     const len = lengths(p);
     roads.push({ cls, flags, p, len, total: len[len.length - 1] });
   }
-  return { tx, ty, key: ty * TX + tx, nb, bN, bH, bKind, bOff, bMaxY, verts: new Float32Array(verts), maxH, roads, used: 0, paths: null };
+  return { tx, ty, key: ty * TX + tx, nb, bN, bH, bKind, bGen, bOff, bMaxY, verts: new Float32Array(verts), maxH, roads, used: 0, paths: null };
 }
 
 export class City {

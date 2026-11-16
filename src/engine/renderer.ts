@@ -3,6 +3,7 @@
 // building layer over them, one multiply fill for time of day, an additive
 // pass for lights, then optional data overlays and signs.
 import { Chunks, COARSE, COARSE_S, type DetailChunk } from './chunks';
+import { ZONE_COL, type Hit } from '../world/query';
 import type { Camera } from './camera';
 import type { City } from '../world/city';
 import { TRAIN_CARS, type Sim, type Pick } from '../sim/sim';
@@ -11,7 +12,7 @@ import { CITY_W, CITY_H, WORLD_H, TILE, TX, TY } from '../world/geo';
 import { hash2 } from '../world/rng';
 import { VW, VH, VOX, VOY, PW, PH, POX, POY, TW_, TH_, TOX, TOY, type Sheets } from '../art/actors';
 
-export type Overlay = 'none' | 'roads' | 'metro' | 'traffic' | 'density' | 'landuse';
+export type Overlay = 'none' | 'roads' | 'metro' | 'traffic' | 'density' | 'landuse' | 'zones';
 export const ROAD_COL = ['#ff5a4f', '#ff8a3c', '#ffc23c', '#fff07a', '#e8f0ff', '#9fb4d0', '#6f7f98'];
 const ROAD_PX = [5, 4.5, 4, 3, 2.4, 1.4, 1];
 const TRAFFIC = ['#4cd964', '#ffcc33', '#ff4d4d'];
@@ -26,6 +27,10 @@ export class Renderer {
   overlay: Overlay = 'none';
   selected: Pick | null = null;
   selectedPlace = -1;
+  /** Building picked with the inspect tool. */
+  building: Hit | null = null;
+  /** Close-up layers need a lot of canvas memory; skip them on small devices. */
+  hiRes = ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) >= 4;
   stamped: (i: number) => boolean = () => false;
   visibleChunks = 0;
   drawnEntities = 0;
@@ -145,7 +150,8 @@ export class Renderer {
       }
       if (missing) { drawOverview(ov); drawCoarse(false, vis.length === 0 || !cam.dragging); }
       ctx.imageSmoothingEnabled = cam.zoom < 1;
-      for (const c of vis) ctx.drawImage(c.g!, c.tx * TILE, (c.ty * TILE) / 2);
+      const hi = this.hiRes && cam.zoom >= 2;
+      for (const c of vis) ctx.drawImage(hi && c.hg ? c.hg : c.g!, c.tx * TILE, (c.ty * TILE) / 2, TILE, TILE / 2);
       ctx.imageSmoothingEnabled = false;
 
       sim.view.x0 = x0 - 60; sim.view.x1 = x1 + 60; sim.view.y0 = y0 * 2 - 80; sim.view.y1 = y1 * 2 + 160; sim.view.on = true;
@@ -186,9 +192,24 @@ export class Renderer {
       for (const c of vis) {
         chunks.bakeStructs(c);
         if (!chunks.structsDone(c)) pending++;
-        if (c.s) ctx.drawImage(c.s, c.sx, c.sy);
+        if (hi && chunks.structsDone(c)) chunks.bakeHi(c, !cam.dragging && !cam.flying);
+        if (c.s) ctx.drawImage(hi && chunks.hiDone(c) ? c.hs! : c.s, c.sx, c.sy, c.s.width, c.s.height);
       }
       ctx.imageSmoothingEnabled = false;
+      const b = this.building;
+      if (b) {
+        const t = b.tile, v = t.verts, off = t.bOff[b.i], n = t.bN[b.i], h = t.bH[b.i];
+        const glow = 0.5 + 0.25 * Math.sin(sim.clock * 5);
+        ctx.beginPath();
+        for (let k = 0; k < n; k++) ctx.lineTo(v[off + k * 2], v[off + k * 2 + 1] / 2 - h);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255,206,74,${glow})`; ctx.fill();
+        ctx.lineWidth = 1.5 / Math.min(2, cam.zoom); ctx.strokeStyle = '#fff7e0'; ctx.lineJoin = 'round'; ctx.stroke();
+        ctx.beginPath();
+        for (let k = 0; k < n; k++) ctx.lineTo(v[off + k * 2], v[off + k * 2 + 1] / 2);
+        ctx.closePath();
+        ctx.setLineDash([2, 2]); ctx.strokeStyle = 'rgba(255,247,224,0.7)'; ctx.stroke(); ctx.setLineDash([]);
+      }
 
       if (cam.zoom >= 2) {
         const isc = cam.zoom >= 4 ? 0.5 : 1; // keep bubbles the same size on screen
@@ -300,7 +321,7 @@ export class Renderer {
 
     this.drawSigns();
     this.pending = pending;
-    if ((this.frame & 63) === 0) chunks.evict(Math.max(26, vis.length + 10), 72);
+    if ((this.frame & 63) === 0) { chunks.evict(Math.max(26, vis.length + 10), 72); chunks.evictHi(this.hiRes && mode === 'detail' && cam.zoom >= 2 ? vis.length + 2 : 0); }
   }
 
   private drawTrains(sheet: HTMLCanvasElement, x0: number, x1: number, y0: number, y1: number, snap: (v: number) => number) {
@@ -365,6 +386,21 @@ export class Renderer {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(chunks.raster(o), 0, 0, CITY_W, WORLD_H);
       if (o === 'landuse') this.strokeRoads(px, 3, x0, y0, x1, y1, cx0, cy0, cx1, cy1, () => 'rgba(255,255,255,0.28)', 0.5);
+      return;
+    }
+    if (o === 'zones') {
+      if (this.mode === 'detail') {
+        for (const c of this.vis) {
+          const zp = chunks.zonePaths(c.tile);
+          for (let z = 0; z < 4; z++) { ctx.fillStyle = ZONE_COL[z]; ctx.fill(zp[z]); }
+        }
+      } else {
+        ctx.imageSmoothingEnabled = false;
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(chunks.raster('zones'), 0, 0, CITY_W, WORLD_H);
+        ctx.globalAlpha = 1;
+      }
+      this.strokeRoads(px, 3, x0, y0, x1, y1, cx0, cy0, cx1, cy1, () => 'rgba(255,255,255,0.22)', 0.5);
       return;
     }
     if (o === 'roads') {

@@ -10,6 +10,8 @@ import { ROAD_COL, type Renderer, type Overlay } from '../engine/renderer';
 import type { Chunks } from '../engine/chunks';
 import { spriteFor } from '../art/sprites';
 import { CITY_W, WORLD_H, ROAD_NAMES, TILE, TX } from '../world/geo';
+import { t, word, up, lang, onLang, PLACE_HI } from './i18n';
+import { ZONE_LEGEND, zonesInfo } from './tools';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORE = 'hyderabad-days.stamps';
@@ -22,6 +24,7 @@ const LEGENDS: Record<Overlay, [string, string][]> = {
   traffic: [['#4cd964', 'Flowing'], ['#ffcc33', 'Slow'], ['#ff4d4d', 'Jammed']],
   metro: [['#d8433b', 'Red line'], ['#3b78d8', 'Blue line'], ['#3aa657', 'Green line'], ['rgba(70,225,205,0.5)', '10 min walk'], ['#cfcfd8', 'Railway']],
   density: [['#3c5aa0', 'Sparse'], ['#46aabe', 'Low'], ['#78d278', 'Medium'], ['#f0dc5a', 'Dense'], ['#f5963c', 'Very dense'], ['#e64646', 'Packed']],
+  zones: ZONE_LEGEND,
   landuse: [['#f5cd5a', 'Residential'], ['#5a96f0', 'Commercial'], ['#be6edc', 'Industrial'], ['#5ac86e', 'Parks'], ['#329650', 'Forest'], ['#aac85a', 'Farmland'], ['#c85a50', 'Military'], ['#46aae6', 'Water']],
 };
 
@@ -89,12 +92,13 @@ export class UI {
     cam.onUserMove = () => { this.stopFollow(); $('hint').classList.add('gone'); };
     cam.onTap = (wx, wy) => this.tap(wx, wy);
     // events announce themselves; tapping the announcement takes you there
-    events.onStart = (a) => this.toast(`HAPPENING NOW: ${a.ev.name.toUpperCase()} · TAP TO GO`, () => this.goEvent(a.ev, false), 7);
+    events.onStart = (a) => this.toast(t('toast.event', { e: up(word(a.ev.name)) }), () => this.goEvent(a.ev, false), 7);
 
     this.renderList();
     this.counts();
     this.clock(true);
     window.addEventListener('hashchange', () => this.fromHash());
+    onLang(() => this.relabel());
   }
 
   private setLive(on: boolean) {
@@ -121,7 +125,7 @@ export class UI {
     for (const [col, name] of LEGENDS[cur]) {
       const s = document.createElement('span'), i = document.createElement('i');
       i.style.background = col;
-      s.append(i, name.toUpperCase());
+      s.append(i, up(word(name)));
       lg.append(s);
     }
     this.viewInfo();
@@ -137,9 +141,9 @@ export class UI {
         const d = Math.hypot(st.x - cam.x, st.y - cam.y * 2);
         if (d < bd) { bd = d; best = st.name; line = m.name; }
       }
-      el.textContent = best ? `NEAREST TO CENTRE: ${best.toUpperCase()} (${line.toUpperCase()}) · ${bd < 1000 ? Math.round(bd / 10) * 10 + ' M' : (bd / 1000).toFixed(1) + ' KM'} · ${Math.max(1, Math.round(bd / 80))} MIN WALK` : 'NO METRO DATA';
+      el.textContent = best ? t('view.metro', { st: best.toUpperCase(), line: line.toUpperCase(), dist: bd < 1000 ? t('unit.m', { n: Math.round(bd / 10) * 10 }) : t('unit.km', { n: (bd / 1000).toFixed(1) }), min: Math.max(1, Math.round(bd / 80)) }) : t('view.noMetro');
     } else if (o === 'roads') {
-      if (this.r.mode !== 'detail') { el.textContent = 'MAIN ROADS SHOWN · ZOOM IN FOR EVERY STREET'; return; }
+      if (this.r.mode !== 'detail') { el.textContent = t('view.roadsZoom'); return; }
       const vw = cam.w / cam.zoom / 2, vh = cam.h / cam.zoom;
       let main = 0, local = 0;
       for (let ty = Math.floor((cam.y * 2 - vh) / TILE); ty <= Math.floor((cam.y * 2 + vh) / TILE); ty++) {
@@ -148,12 +152,13 @@ export class UI {
           if (t) for (const r of t.roads) { if (r.cls <= 4) main += r.total; else local += r.total; }
         }
       }
-      el.textContent = `AROUND HERE: ${(main / 1000).toFixed(0)} KM MAIN ROADS · ${(local / 1000).toFixed(0)} KM STREETS`;
+      el.textContent = t('view.roads', { main: (main / 1000).toFixed(0), local: (local / 1000).toFixed(0) });
     } else if (o === 'traffic') {
       const c = this.sim.congestion(2);
-      el.textContent = `SIMULATED FROM TIME, RAIN AND EVENTS · MAIN ROADS ${c > 0.6 ? 'JAMMED' : c > 0.33 ? 'SLOW' : 'FLOWING'}`;
-    } else if (o === 'density') el.textContent = 'BUILT FLOOR AREA PER 32 M CELL, FROM REAL FOOTPRINTS';
-    else el.textContent = 'LAND USE AS MAPPED IN OPENSTREETMAP';
+      el.textContent = t('view.traffic', { s: up(word(c > 0.6 ? 'Jammed' : c > 0.33 ? 'Slow' : 'Flowing')) });
+    } else if (o === 'zones') el.textContent = zonesInfo(this.r.mode === 'detail');
+    else if (o === 'density') el.textContent = t('view.density');
+    else el.textContent = t('view.landuse');
   }
 
   fromHash(): boolean {
@@ -175,11 +180,11 @@ export class UI {
     list.textContent = '';
     let area = '';
     for (const p of this.city.places) {
-      if (q && !p.name.toLowerCase().includes(q) && !p.te.includes(q) && !p.area.toLowerCase().includes(q)) continue;
+      if (q && !p.name.toLowerCase().includes(q) && !p.te.includes(q) && !(PLACE_HI[p.id] ?? '').includes(q) && !p.area.toLowerCase().includes(q) && !word(p.area).includes(q)) continue;
       if (p.area !== area) {
         area = p.area;
         const h = document.createElement('h4');
-        h.textContent = area.toUpperCase();
+        h.textContent = up(word(area));
         list.append(h);
       }
       const b = document.createElement('button');
@@ -187,13 +192,14 @@ export class UI {
       const st = document.createElement('span'); st.className = 'st'; st.textContent = 'OK';
       const nm = document.createElement('span'); nm.className = 'nm';
       const a = document.createElement('span'); a.textContent = p.name;
-      const t = document.createElement('span'); t.textContent = p.te; t.lang = 'te';
-      nm.append(a, t);
+      const [sec, secLang] = this.second(p);
+      const tt = document.createElement('span'); tt.textContent = sec; tt.lang = secLang;
+      nm.append(a, tt);
       b.append(st, nm);
       b.onclick = () => { this.openPlace(p, true); if (window.innerWidth < 700) this.drawer(''); };
       list.append(b);
     }
-    if (!list.children.length) { const e = document.createElement('p'); e.textContent = 'No place by that name.'; list.append(e); }
+    if (!list.children.length) { const e = document.createElement('p'); e.textContent = t('passport.none'); list.append(e); }
   }
 
   private goEvent(ev: CityEvent, start: boolean) {
@@ -204,9 +210,9 @@ export class UI {
   }
 
   private counts() {
-    const t = `${this.stamps.size}/${this.city.places.length}`;
-    $('stampCount').textContent = t;
-    $('stampCount2').textContent = `${t} stamped`;
+    const n = `${this.stamps.size}/${this.city.places.length}`;
+    $('stampCount').textContent = n;
+    $('stampCount2').textContent = t('passport.stamped', { n });
   }
 
   private stamp(p: Place) {
@@ -216,8 +222,8 @@ export class UI {
     this.counts();
     if (!$('passport').hidden) this.renderList();
     const all = this.stamps.size === this.city.places.length;
-    this.toast(all ? 'PASSPORT COMPLETE! YOU KNOW HYDERABAD.' : `STAMPED: ${p.name.toUpperCase()} · ${this.stamps.size}/${this.city.places.length}`);
-    if (p.id === this.openId) $('cardTag').textContent = `${p.area.toUpperCase()} · STAMPED`;
+    this.toast(all ? t('toast.complete') : t('toast.stamped', { p: lang() === 'hi' ? PLACE_HI[p.id] ?? p.name : p.name.toUpperCase(), n: this.stamps.size, t: this.city.places.length }));
+    if (p.id === this.openId) $('cardTag').textContent = `${up(word(p.area))} · ${t('card.stampedTag')}`;
   }
 
   private toast(msg: string, onTap: (() => void) | null = null, secs = 2.8) {
@@ -260,11 +266,13 @@ export class UI {
       const d = Math.hypot(p.x - this.cam.x, p.y / 2 - this.cam.y);
       this.cam.flyTo(p.x, p.y / 2 - (p.lift ?? 30) / 3, 2, Math.min(2.4, 1 + d / 9000));
     }
-    $('cardTag').textContent = `${p.area.toUpperCase()}${this.stamps.has(p.id) ? ' · STAMPED' : ''}`;
+    $('cardTag').textContent = `${up(word(p.area))}${this.stamps.has(p.id) ? ` · ${t('card.stampedTag')}` : ''}`;
     $('cardName').textContent = p.name;
-    $('cardTe').textContent = p.te;
+    const [sec, secLang] = this.second(p);
+    $('cardTe').textContent = sec;
+    $('cardTe').lang = secLang;
     $('cardBlurb').textContent = p.blurb;
-    $('cardAction').textContent = 'FLY THERE';
+    $('cardAction').textContent = t('card.fly');
     $('cardAction').hidden = fly;
     this.portrait(PORTRAIT[p.id] ?? p.sprite ?? 'lm:flag');
     $('card').hidden = false;
@@ -286,12 +294,12 @@ export class UI {
     if (!this.actor) return;
     if (!this.sim.alive(this.actor)) { this.closeCard(); return; }
     const d = this.sim.describe(this.actor);
-    $('cardTag').textContent = this.actor.type === 'c' ? 'CITIZEN' : this.actor.type === 't' ? 'METRO' : 'ON THE ROAD';
+    $('cardTag').textContent = t(this.actor.type === 'c' ? 'card.citizen' : this.actor.type === 't' ? 'card.metro' : 'card.road');
     $('cardName').textContent = d.title;
     $('cardTe').textContent = '';
     $('cardBlurb').textContent = d.lines.join(' · ');
     $('cardAction').hidden = false;
-    $('cardAction').textContent = this.follow ? 'STOP' : d.action.toUpperCase();
+    $('cardAction').textContent = this.follow ? t('card.stop') : d.action.toUpperCase();
   }
 
   private cardAction() {
@@ -346,6 +354,33 @@ export class UI {
     else ctx.drawImage(sh.train, 0, this.sim.trains[pick.i].line * 24, 30, 24, 3, 12, 90, 72);
   }
 
+  /** Second name under a place: Hindi in Hindi mode, Telugu otherwise. */
+  private second(p: Place): [string, string] {
+    return lang() === 'hi' && PLACE_HI[p.id] ? [PLACE_HI[p.id], 'hi'] : [p.te, 'te'];
+  }
+
+  private liveLabel(): string {
+    const l = this.live;
+    if (!l.on) return t('clock.game');
+    if (l.failed && l.temp === null) return t('live.offline');
+    if (l.temp === null) return t('live.checking');
+    return t('live.label', { t: l.temp, d: up(word(l.desc)) });
+  }
+
+  /** Re-renders every dynamic string after a language switch. */
+  private relabel() {
+    this.counts();
+    this.renderList();
+    this.clock(true);
+    this.pulse();
+    if (this.r.overlay !== 'none') { const o = this.r.overlay; this.r.overlay = 'none'; this.setOverlay(o); }
+    if (this.actor) this.refreshActor();
+    else if (this.openId) {
+      const p = this.city.places.find((q) => q.id === this.openId);
+      if (p) { const hide = $('cardAction').hidden; this.openPlace(p, false); $('cardAction').hidden = hide; }
+    }
+  }
+
   private clock(force = false) {
     const m = Math.floor(this.sim.time);
     if (!force && m === this.lastMinute) return;
@@ -353,10 +388,10 @@ export class UI {
     const h = Math.floor(m / 60), s = this.sim;
     $('time').textContent = `${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
     const hr = m / 60;
-    const part = hr < s.sunrise - 0.7 ? 'NIGHT' : hr < s.sunrise + 1 ? 'DAWN' : hr < 12 ? 'MORNING' : hr < 16 ? 'AFTERNOON' : hr < s.sunset + 0.8 ? 'EVENING' : 'NIGHT';
-    const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-    $('dayline').textContent = `${days[s.weekday]} · ${part}${s.rain > 0.4 ? ' · RAIN' : ''}`;
-    $('liveline').textContent = this.live.on ? this.live.label : 'GAME TIME';
+    const part = t(hr < s.sunrise - 0.7 ? 'part.night' : hr < s.sunrise + 1 ? 'part.dawn' : hr < 12 ? 'part.morning' : hr < 16 ? 'part.afternoon' : hr < s.sunset + 0.8 ? 'part.evening' : 'part.night');
+    const days = t('days').split(',');
+    $('dayline').textContent = `${days[s.weekday]} · ${part}${s.rain > 0.4 ? ` · ${t('part.rain')}` : ''}`;
+    $('liveline').textContent = this.liveLabel();
     if (!this.scrubbing) $<HTMLInputElement>('scrub').value = String(m);
     const sky = $('sky');
     const [r, g, b] = s.tint;
@@ -372,11 +407,11 @@ export class UI {
     const c = s.congestion(2);
     const ev = this.events.active[0];
     const lines = [
-      `${this.city.buildings.toLocaleString('en-IN')} REAL BUILDINGS ON THE MAP`,
-      `TRAFFIC: ${c > 0.6 ? 'HONKING EVERYWHERE' : c > 0.33 ? 'BUSY, AS USUAL' : 'SMOOTH FOR ONCE'}`,
-      `${Math.round(s.chai).toLocaleString('en-IN')} CUPS OF CHAI POURED TODAY`,
-      `METRO: ${s.trains.length} TRAINS ON ${this.city.metro.length} LINES`,
-      ev ? `ON NOW: ${ev.ev.name.toUpperCase()}` : s.rain > 0.4 ? 'MONSOON SHOWER OVER THE CITY' : s.night > 0.6 ? 'CITY LIGHTS ARE ON' : 'CLEAR DECCAN SKIES',
+      t('pulse.buildings', { n: this.city.buildings.toLocaleString('en-IN') }),
+      t('pulse.traffic', { s: t(c > 0.6 ? 'pulse.honk' : c > 0.33 ? 'pulse.busy' : 'pulse.smooth') }),
+      t('pulse.chai', { n: Math.round(s.chai).toLocaleString('en-IN') }),
+      t('pulse.metro', { t: s.trains.length, l: this.city.metro.length }),
+      ev ? t('pulse.onNow', { e: up(word(ev.ev.name)) }) : t(s.rain > 0.4 ? 'pulse.monsoon' : s.night > 0.6 ? 'pulse.lights' : 'pulse.clear'),
     ];
     this.pulseIdx = (this.pulseIdx + 1) % lines.length;
     $('pulseText').textContent = lines[this.pulseIdx];
@@ -400,7 +435,7 @@ export class UI {
     this.acc = 0;
     this.clock();
     this.pulseAcc += step;
-    if (this.pulseAcc > 3.5) { this.pulseAcc = 0; this.pulse(); $('liveline').textContent = this.live.on ? this.live.label : 'GAME TIME'; }
+    if (this.pulseAcc > 3.5) { this.pulseAcc = 0; this.pulse(); $('liveline').textContent = this.liveLabel(); }
     if (this.actor) this.refreshActor();
     $('rainBtn').classList.toggle('on', this.sim.raining);
     if (this.r.overlay !== 'none') this.viewInfo();

@@ -14,20 +14,20 @@
       <div id="brand">
         <div class="panel title">
           <h1>HYDERABAD DAYS</h1>
-          <p><span lang="te">హైదరాబాద్</span> · the real city, in pixels</p>
+          <p><span lang="te">హైదరాబాద్</span> / <span lang="hi">हैदराबाद</span> · <span data-i18n="brand.sub">the real city, in pixels</span></p>
         </div>
         <div class="menu">
-          <button id="passportBtn" class="panel btn"><span class="stampdot"></span>PASSPORT <b id="stampCount">0/0</b></button>
-          <button id="viewsBtn" class="panel btn alt">MAP VIEWS</button>
+          <button id="passportBtn" class="panel btn"><span class="stampdot"></span><span data-i18n="btn.passport">PASSPORT</span> <b id="stampCount">0/0</b></button>
+          <button id="viewsBtn" class="panel btn alt" data-i18n="btn.views">MAP VIEWS</button>
         </div>
         <div id="views" class="panel" hidden>
           <div class="grid">
-            <button data-ov="roads">ROADS</button>
-            <button data-ov="metro">METRO</button>
-            <button data-ov="traffic">TRAFFIC</button>
-            <button data-ov="density">DENSITY</button>
-            <button data-ov="landuse">LAND USE</button>
-            <button data-ov="none">OFF</button>
+            <button data-ov="roads" data-i18n="ov.roads">ROADS</button>
+            <button data-ov="metro" data-i18n="ov.metro">METRO</button>
+            <button data-ov="traffic" data-i18n="ov.traffic">TRAFFIC</button>
+            <button data-ov="density" data-i18n="ov.density">DENSITY</button>
+            <button data-ov="landuse" data-i18n="ov.landuse">LAND USE</button>
+            <button data-ov="none" data-i18n="ov.none">OFF</button>
           </div>
           <div id="legend"></div>
           <div id="viewInfo"></div>
@@ -41,41 +41,41 @@
         </div>
         <div id="dayline">DAY 1</div>
         <div id="liveline"></div>
-        <input id="scrub" type="range" min="0" max="1439" step="1" aria-label="Time of day" />
+        <input id="scrub" type="range" min="0" max="1439" step="1" aria-label="Time of day" data-i18n-aria="clock.timeOfDay" />
         <div class="row" role="group" aria-label="Clock mode">
-          <button id="liveBtn" title="Follow real Hyderabad time and weather">LIVE</button>
-          <button data-speed="0" aria-label="Pause">II</button>
-          <button data-speed="1" aria-label="Normal speed">&gt;</button>
-          <button data-speed="3" aria-label="Fast">&gt;&gt;&gt;</button>
+          <button id="liveBtn" title="Follow real Hyderabad time and weather" data-i18n="clock.live" data-i18n-title="clock.liveTitle">LIVE</button>
+          <button data-speed="0" aria-label="Pause" data-i18n-aria="clock.pause">II</button>
+          <button data-speed="1" aria-label="Normal speed" data-i18n-aria="clock.normal">&gt;</button>
+          <button data-speed="3" aria-label="Fast" data-i18n-aria="clock.fast">&gt;&gt;&gt;</button>
         </div>
         <div class="row">
-          <button id="rainBtn">RAIN</button>
-          <button id="signBtn" class="on">SIGNS</button>
+          <button id="rainBtn" data-i18n="clock.rain">RAIN</button>
+          <button id="signBtn" class="on" data-i18n="clock.signs">SIGNS</button>
         </div>
       </div>
 
-      <div id="pulse" class="panel"><span class="led"></span><span id="pulseText">CITY PULSE</span></div>
+      <div id="pulse" class="panel"><span class="led"></span><span id="pulseText" data-i18n="pulse.title">CITY PULSE</span></div>
 
       <div id="mini" class="panel">
         <canvas id="minimap" width="200" height="92"></canvas>
         <div class="zoom">
-          <button id="zin" aria-label="Zoom in">+</button>
-          <button id="zout" aria-label="Zoom out">-</button>
+          <button id="zin" aria-label="Zoom in" data-i18n-aria="zoom.in">+</button>
+          <button id="zout" aria-label="Zoom out" data-i18n-aria="zoom.out">-</button>
         </div>
       </div>
 
       <aside id="passport" class="panel" hidden>
         <header>
-          <h2>CITY PASSPORT</h2>
-          <button id="passportClose" aria-label="Close passport">X</button>
+          <h2 data-i18n="passport.title">CITY PASSPORT</h2>
+          <button id="passportClose" aria-label="Close passport" data-i18n-aria="passport.close">X</button>
         </header>
-        <p class="sub">Wander the city to stamp every place. <b id="stampCount2"></b></p>
-        <input id="search" type="search" placeholder="Search places" autocomplete="off" />
+        <p class="sub"><span data-i18n="passport.sub">Wander the city to stamp every place.</span> <b id="stampCount2"></b></p>
+        <input id="search" type="search" placeholder="Search places" autocomplete="off" data-i18n-ph="passport.search" />
         <div id="placeList"></div>
       </aside>
 
       <div id="card" class="panel" hidden>
-        <button id="cardClose" aria-label="Close">X</button>
+        <button id="cardClose" aria-label="Close" data-i18n-aria="card.close">X</button>
         <canvas id="portrait" width="96" height="96"></canvas>
         <div class="cardBody">
           <div class="tag" id="cardTag"></div>
@@ -87,8 +87,8 @@
       </div>
 
       <div id="toast" class="panel" hidden></div>
-      <div id="hint">DRAG TO EXPLORE · SCROLL TO ZOOM · TAP ANYTHING THAT MOVES</div>
-      <div id="credit">Map data © OpenStreetMap contributors</div>
+      <div id="hint" data-i18n="hint">DRAG TO EXPLORE · SCROLL TO ZOOM · TAP ANYTHING THAT MOVES</div>
+      <div id="credit" data-i18n="credit">Map data © OpenStreetMap contributors</div>
       <pre id="debug" hidden></pre>
     </div>
 
