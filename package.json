@@ -1,0 +1,21 @@
+{
+  "name": "hyderabad-days",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "map": "node scripts/fetch-osm.mjs && node --max-old-space-size=8000 scripts/build-map.mjs",
+    "map:build": "node --max-old-space-size=8000 scripts/build-map.mjs"
+  },
+  "devDependencies": {
+    "@fontsource/silkscreen": "^5.0.0",
+    "@types/node": "^26.6.6",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.0"
+  }
+}
