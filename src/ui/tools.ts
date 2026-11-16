@@ -1,5 +1,4 @@
-// City-builder tools layered on the HUD: tap any building to inspect it, a
-// zones map view, and a live report on the neighbourhood in view (population,
+// City-builder tools layered on the HUD: a zones map view and a live report on the neighbourhood in view (population,
 // jobs, demand bars, ratings and an advisor's remark). The DOM is created
 // here so the tools stay self-contained.
 import './tools.css';
@@ -7,7 +6,7 @@ import type { City } from '../world/city';
 import type { Sim } from '../sim/sim';
 import type { Camera } from '../engine/camera';
 import type { Renderer } from '../engine/renderer';
-import { pickBuilding, describeBuilding, areaReport, ZONE_COL, ZONE_NAMES, type Report } from '../world/query';
+import { areaReport, ZONE_COL, ZONE_NAMES, type Report } from '../world/query';
 import { lang, onLang, up } from './i18n';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -82,21 +81,18 @@ export function addZonesButton() {
 }
 
 export class CityTools {
-  private inspect = el('div', 'panel');
   private report = el('aside', 'panel');
   private btn = el('button', 'panel btn alt') as HTMLButtonElement;
   private acc = 9;
   private last: Report | null = null;
 
   constructor(private city: City, private sim: Sim, private cam: Camera, private r: Renderer) {
-    this.inspect.id = 'inspect'; this.inspect.hidden = true;
     this.report.id = 'report'; this.report.hidden = true;
     this.btn.id = 'reportBtn';
     this.btn.onclick = () => { this.report.hidden = !this.report.hidden; this.btn.classList.toggle('on', !this.report.hidden); this.acc = 9; };
     const menu = document.querySelector('.menu');
     menu?.insertBefore(this.btn, $('langBtn') ?? null);
-    $('hud').append(this.inspect, this.report);
-    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.close(); });
+    $('hud').append(this.report);
     onLang(() => this.relabel());
     this.relabel();
   }
@@ -105,45 +101,10 @@ export class CityTools {
     this.btn.textContent = s('report');
     const z = document.getElementById('zonesBtn');
     if (z) z.textContent = s('zones');
-    if (this.r.building) this.show();
     this.acc = 9;
   }
 
-  /** Called after the HUD has handled a tap; picks a building if nothing else was hit. */
-  tap(wx: number, wy: number) {
-    const ov = this.r.overlay;
-    if (!$('card').hidden || this.r.mode !== 'detail' || (ov !== 'none' && ov !== 'zones')) { this.close(); return; }
-    const hit = pickBuilding(this.city, wx, wy);
-    if (!hit) { this.close(); return; }
-    this.r.building = hit;
-    this.show();
-  }
-
-  close() {
-    this.r.building = null;
-    this.inspect.hidden = true;
-  }
-
-  private show() {
-    const f = describeBuilding(this.city, this.r.building!);
-    const p = this.inspect;
-    p.textContent = '';
-    const x = el('button', 'x', 'X'); x.setAttribute('aria-label', s('close')); x.onclick = () => this.close();
-    const tag = el('div', 'tag');
-    const chip = el('i'); chip.style.background = ZONE_COL[f.zone];
-    tag.append(chip, `${up(s(ZONE_NAMES[f.zone]))}${f.suburb ? ' · ' + up(f.suburb) : ''}`);
-    const grid = el('dl');
-    const row = (k: string, v: string) => { grid.append(el('dt', '', s(k)), el('dd', '', v)); };
-    row('height', s(f.floors > 1 ? 'floors' : 'floor1', { h: f.height, n: f.floors }));
-    row('footprint', s('sqm', { n: num(f.footprint) }));
-    if (f.peopleLabel) row(f.peopleLabel, s('about', { n: num(Math.max(1, f.people)) }));
-    if (f.station) row('metro', f.stationDist < 2500 ? s('walk', { st: up(f.station), min: Math.max(1, Math.round(f.stationDist / 80)) }) : s('far', { st: up(f.station), km: (f.stationDist / 1000).toFixed(1) }));
-    p.append(x, tag, el('h3', '', up(s(f.title))), grid, el('p', 'note', s(f.generated ? 'gen' : 'real')));
-    p.hidden = false;
-  }
-
   update(dt: number) {
-    if (this.r.building && (!$('card').hidden || this.r.mode !== 'detail')) this.close();
     if (this.report.hidden) return;
     this.acc += dt;
     if (this.acc < 0.8) return;

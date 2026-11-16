@@ -1,17 +1,21 @@
 // City events: scheduled happenings that change what the simulation shows.
-// The calendar is a game one (weekday based), not the real festival dates.
+// Most run on a game calendar (weekday based). Festivals (festivals.ts) run on
+// the real date in India and show during their hours on the game clock.
 // All effects are procedural and cheap: a few hundred fillRects at most.
 import type { City, Place } from '../world/city';
 import type { Sim } from './sim';
 import type { Sheets } from '../art/actors';
+import { FESTIVALS, festivalsOn, indiaToday } from './festivals';
 
 type Ctx = CanvasRenderingContext2D;
-type Fx = 'crowd' | 'strings' | 'fireworks' | 'laser' | 'ferris' | 'kites' | 'flood' | 'floodlights' | 'confetti';
+export type Fx = 'crowd' | 'strings' | 'fireworks' | 'laser' | 'ferris' | 'kites' | 'flood' | 'floodlights' | 'confetti';
 
 export interface CityEvent {
   id: string; name: string; place: string; sites?: string[];
   from: number; to: number; days: number[] | null;
   blurb: string; fx: Fx[]; r: number; crowd: number; jam?: number;
+  /** festival: on when the real date matches, not by weekday */
+  fest?: boolean;
 }
 const DAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
@@ -33,6 +37,7 @@ export const EVENTS: CityEvent[] = [
   { id: 'flood', name: 'Monsoon waterlogging', place: 'necklace-road', sites: ['necklace-road', 'high-court', 'nampally', 'cyber-towers', 'abids'], from: 0, to: 0, days: [], r: 160, crowd: 0, jam: 600,
     blurb: 'Heavy rain has flooded low-lying junctions. Traffic is crawling.', fx: ['flood'] },
 ];
+for (const { dates, ...f } of FESTIVALS) EVENTS.push({ ...f, days: [], fest: true });
 
 const h1 = (n: number, s: number) => { const x = Math.sin(n * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
 const BRIGHT = ['#ff5a6e', '#ffd23f', '#5ad1ff', '#7dff8a', '#ff9f43', '#d98bff'];
@@ -44,6 +49,9 @@ export class Events {
   active: Active[] = [];
   private forced = new Map<string, number>();
   private wet = 0;
+  /** ids of festivals happening today (real date), refreshed once a minute */
+  festToday = new Set<string>();
+  private festCheck = 0;
   onStart: (a: Active) => void = () => {};
 
   constructor(private city: City, private sim: Sim) {}
@@ -55,6 +63,7 @@ export class Events {
     const s = this.sim;
     if ((this.forced.get(ev.id) ?? 0) > s.clock) return true;
     if (ev.id === 'flood') return this.wet > 25;
+    if (ev.fest) return this.festToday.has(ev.id) && s.hour >= ev.from && s.hour < ev.to;
     if (ev.days && !ev.days.includes(s.weekday)) return false;
     return s.hour >= ev.from && s.hour < ev.to;
   }
@@ -63,6 +72,7 @@ export class Events {
   stop(id: string) { this.forced.delete(id); }
   when(ev: CityEvent): string {
     if (ev.id === 'flood') return 'WHEN IT POURS';
+    if (ev.fest) return 'FESTIVAL';
     const f = (h: number) => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
     return `${ev.days ? ev.days.map((d) => DAY[d]).join(' ') : 'DAILY'} ${f(ev.from)}-${f(ev.to)}`;
   }
@@ -70,6 +80,8 @@ export class Events {
   update(dt: number) {
     const s = this.sim;
     this.wet = s.rain > 0.85 ? this.wet + dt : Math.max(0, this.wet - dt * 2);
+    this.festCheck -= dt;
+    if (this.festCheck <= 0) { this.festCheck = 60; this.festToday = new Set(festivalsOn(indiaToday()).map((f) => f.id)); }
     for (const ev of EVENTS) {
       const on = this.isOn(ev);
       const i = this.active.findIndex((a) => a.ev === ev);

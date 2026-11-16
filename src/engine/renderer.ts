@@ -3,7 +3,8 @@
 // building layer over them, one multiply fill for time of day, an additive
 // pass for lights, then optional data overlays and signs.
 import { Chunks, COARSE, COARSE_S, type DetailChunk } from './chunks';
-import { ZONE_COL, type Hit } from '../world/query';
+import { ZONE_COL } from '../world/query';
+import { TIERS, renderDpr, type Quality } from './quality';
 import type { Camera } from './camera';
 import type { City } from '../world/city';
 import { TRAIN_CARS, type Sim, type Pick } from '../sim/sim';
@@ -28,9 +29,11 @@ export class Renderer {
   selected: Pick | null = null;
   selectedPlace = -1;
   /** Building picked with the inspect tool. */
-  building: Hit | null = null;
-  /** Close-up layers need a lot of canvas memory; skip them on small devices. */
-  hiRes = ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) >= 4;
+  /** Graphics settings for this device (see quality.ts). */
+  quality: Quality = TIERS[2];
+  /** True while a burst of new map is being baked; the governor ignores those frames. */
+  busy = false;
+  private get hiRes() { return this.quality.hiRes; }
   stamped: (i: number) => boolean = () => false;
   visibleChunks = 0;
   drawnEntities = 0;
@@ -81,9 +84,15 @@ export class Renderer {
     this.resize();
   }
 
+  /** Switch graphics tier: resizes the canvas and lets the caches shrink to fit. */
+  setQuality(q: Quality) {
+    this.quality = q;
+    this.resize();
+  }
+
   resize() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = window.innerWidth, h = window.innerHeight;
+    const dpr = renderDpr(this.quality, w, h, window.devicePixelRatio || 1);
     this.cam.w = w; this.cam.h = h; this.cam.dpr = dpr;
     this.canvas.width = Math.floor(w * dpr);
     this.canvas.height = Math.floor(h * dpr);
@@ -100,7 +109,7 @@ export class Renderer {
     const mode = cam.zoom >= 0.4 ? 'detail' : cam.zoom >= 0.09 ? 'coarse' : 'overview';
     this.mode = mode;
     this.frame++;
-    chunks.beginFrame(cam.dragging || cam.flying ? 5 : 7);
+    chunks.beginFrame(this.quality.bakeMs - (cam.dragging || cam.flying ? 2 : 0));
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
@@ -196,20 +205,6 @@ export class Renderer {
         if (c.s) ctx.drawImage(hi && chunks.hiDone(c) ? c.hs! : c.s, c.sx, c.sy, c.s.width, c.s.height);
       }
       ctx.imageSmoothingEnabled = false;
-      const b = this.building;
-      if (b) {
-        const t = b.tile, v = t.verts, off = t.bOff[b.i], n = t.bN[b.i], h = t.bH[b.i];
-        const glow = 0.5 + 0.25 * Math.sin(sim.clock * 5);
-        ctx.beginPath();
-        for (let k = 0; k < n; k++) ctx.lineTo(v[off + k * 2], v[off + k * 2 + 1] / 2 - h);
-        ctx.closePath();
-        ctx.fillStyle = `rgba(255,206,74,${glow})`; ctx.fill();
-        ctx.lineWidth = 1.5 / Math.min(2, cam.zoom); ctx.strokeStyle = '#fff7e0'; ctx.lineJoin = 'round'; ctx.stroke();
-        ctx.beginPath();
-        for (let k = 0; k < n; k++) ctx.lineTo(v[off + k * 2], v[off + k * 2 + 1] / 2);
-        ctx.closePath();
-        ctx.setLineDash([2, 2]); ctx.strokeStyle = 'rgba(255,247,224,0.7)'; ctx.stroke(); ctx.setLineDash([]);
-      }
 
       if (cam.zoom >= 2) {
         const isc = cam.zoom >= 4 ? 0.5 : 1; // keep bubbles the same size on screen
@@ -306,7 +301,7 @@ export class Renderer {
     // rain streaks in screen space, one path
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (sim.rain > 0.02) {
-      const n = Math.min(420, Math.round(sim.rain * 420 * Math.min(1, (W * H) / 2.2e6 + 0.3)));
+      const n = Math.min(420, Math.round(sim.rain * 420 * this.quality.rain * Math.min(1, (W * H) / 2.2e6 + 0.3)));
       const d = cam.dpr, rs = this.rainSeed, t = sim.clock;
       ctx.strokeStyle = `rgba(196,214,236,${0.5 * sim.rain})`;
       ctx.lineWidth = d;
@@ -321,7 +316,8 @@ export class Renderer {
 
     this.drawSigns();
     this.pending = pending;
-    if ((this.frame & 63) === 0) { chunks.evict(Math.max(26, vis.length + 10), 72); chunks.evictHi(this.hiRes && mode === 'detail' && cam.zoom >= 2 ? vis.length + 2 : 0); }
+    this.busy = pending > 0;
+    if ((this.frame & 63) === 0) { chunks.evict(Math.max(this.quality.detailCap, vis.length + 6), this.quality.coarseCap); chunks.evictHi(this.hiRes && mode === 'detail' && cam.zoom >= 2 ? vis.length + 2 : 0); }
   }
 
   private drawTrains(sheet: HTMLCanvasElement, x0: number, x1: number, y0: number, y1: number, snap: (v: number) => number) {

@@ -97,6 +97,9 @@ export class City {
   onTile: (t: Tile) => void = () => {};
   onEvict: (t: Tile) => void = () => {};
   base = '/map/';
+  /** Tiles kept in memory and fetched at once (set from graphics quality). */
+  tileCap = 150;
+  maxFetch = 8;
 
   static async load(base = `${import.meta.env.BASE_URL}map/`): Promise<City> {
     const c = new City();
@@ -190,7 +193,7 @@ export class City {
     const key = ty * TX + tx;
     const t = this.tiles.get(key);
     if (t) { t.used = ++this.clock; return t; }
-    if (!this.pending.has(key) && this.pending.size < 8) {
+    if (!this.pending.has(key) && this.pending.size < this.maxFetch) {
       this.pending.add(key);
       fetch(`${this.base}t/${tx}_${ty}.bin`)
         .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
@@ -199,7 +202,7 @@ export class City {
           tile.used = ++this.clock;
           this.tiles.set(key, tile);
           this.onTile(tile);
-          if (this.tiles.size > 150) this.evict();
+          if (this.tiles.size > this.tileCap) this.evict();
         })
         .catch(() => { this.tileCount[key] = 0xffff; })
         .finally(() => this.pending.delete(key));
@@ -211,6 +214,7 @@ export class City {
   loadedCount() { return this.tiles.size; }
   private evict() {
     const all = [...this.tiles.values()].sort((a, b) => a.used - b.used);
-    for (let i = 0; i < 40; i++) { this.tiles.delete(all[i].key); this.onEvict(all[i]); }
+    const drop = Math.min(all.length, Math.max(10, Math.round(this.tileCap * 0.27)));
+    for (let i = 0; i < drop; i++) { this.tiles.delete(all[i].key); this.onEvict(all[i]); }
   }
 }

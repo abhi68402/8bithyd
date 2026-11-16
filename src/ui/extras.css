@@ -1,0 +1,24 @@
+/* festival badge under the brand menu */
+#festBadge { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 6px 10px; max-width: 220px; box-shadow: 4px 4px 0 var(--shadow); }
+#festBadge b { color: var(--teal); font-weight: 400; }
+#festBadge span { font-size: 10px; font-weight: 700; }
+#festBadge i { font-style: normal; color: #7a6a8a; }
+#festBadge.now { background: var(--marigold); }
+#festBadge.now b { color: var(--ink); }
+#festBadge.now i { color: var(--ink); animation: festPulse 1.2s steps(2) infinite; }
+@keyframes festPulse { 50% { opacity: 0.4; } }
+
+/* postcard viewer */
+#postcard { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(20, 12, 30, 0.72); font-size: 9px; }
+#postcard .box { width: min(760px, 100%); max-height: calc(100vh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+#postcard h2 { margin: 0; font-size: 12px; }
+#postcard img { width: 100%; height: auto; display: block; image-rendering: pixelated; border: 2px solid var(--ink); }
+#postcard .row { display: flex; gap: 6px; }
+#postcard .row > * { flex: 1; }
+#postcard .btnlike { display: block; text-align: center; text-decoration: none; font: inherit; color: var(--ink); background: var(--marigold); border: 2px solid var(--ink); padding: 5px 8px; box-shadow: 2px 2px 0 var(--shadow); }
+#postcard .btnlike:active { transform: translate(2px, 2px); box-shadow: none; }
+
+@media (max-width: 640px) {
+  #festBadge { max-width: 160px; padding: 4px 8px; }
+  #festBadge span { font-size: 9px; }
+}

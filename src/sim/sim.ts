@@ -58,6 +58,8 @@ export class Sim {
   view = { x0: 0, y0: 0, x1: 0, y1: 0, on: false };
   private nodes = new Map<number, number[]>(); // junction -> [tileKey, roadIndex, end]*
   private active: Tile[] = [];
+  /** Share of the full crowd to simulate (graphics quality). */
+  density = 1;
   private roadW = 0; // traffic-weighted road metres in the active tiles
   private roadT = 0;
   private tp: [number, number, number] = [0, 0, 0];
@@ -283,7 +285,7 @@ export class Sim {
       const viewArea = (v.x1 - v.x0) * (v.y1 - v.y0);
       // ...and never more than the visible streets can hold without queueing
       const share = Math.min(1, viewArea / (Math.max(1, this.active.length) * TILE * TILE));
-      const nv = Math.round(Math.min(Math.max(30, Math.min(NV, viewArea / 2600)), 4 + (this.roadW * share) / 26) * (0.35 + 0.65 * this.activity));
+      const nv = Math.round(Math.min(Math.max(30, Math.min(NV, viewArea / 2600)), 4 + (this.roadW * share) / 26) * (0.35 + 0.65 * this.activity) * this.density);
       const veh = this.veh;
       let spawns = 12;
       for (let i = 0; i < NV; i++) {
@@ -296,7 +298,7 @@ export class Sim {
         for (const j of this.jam) if (Math.abs(x - j.x) < j.r && Math.abs(y - j.y) < j.r) k *= 0.35;
         this.advance(veh, i, veh.spd[i] * k * dt, false);
       }
-      const np = Math.round(Math.min(Math.max(20, Math.min(NP, viewArea / 3200)), 4 + (this.roadT * share) / 55) * this.activity * (1 - this.rain * 0.5));
+      const np = Math.round(Math.min(Math.max(20, Math.min(NP, viewArea / 3200)), 4 + (this.roadT * share) / 55) * this.activity * (1 - this.rain * 0.5) * this.density);
       const ppl = this.ppl;
       spawns = 10;
       for (let i = 0; i < NP; i++) {
@@ -430,7 +432,7 @@ export class Sim {
       const t = this.veh.tile[p.i];
       const cls = t ? t.roads[this.veh.road[p.i]].cls : 5;
       const where = ['on the motorway', 'on the trunk road', 'on a main road', 'on a main road', 'on a link road', 'in the back streets', 'down a service lane'][cls];
-      return { title: row.label, lines: [`Driving ${where}`, `Plate TS 0${(p.i % 9) + 1} ${String.fromCharCode(65 + (p.i % 26))}${String.fromCharCode(65 + ((p.i * 7) % 26))} ${1000 + ((p.i * 7919) % 8999)}`], action: 'Hop on' };
+      return { title: row.label, lines: [`Driving ${where}`], action: 'Hop on' };
     }
     if (p.type === 'c') {
       const name = NAMES[p.i % NAMES.length];
