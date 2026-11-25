@@ -5,6 +5,8 @@ import { Painter, mkCanvas, shade } from './paint';
 
 export const VW = 24, VH = 20, VOX = 12, VOY = 15;
 export const PW = 3, PH = 6, POX = 1, POY = 5;
+/** People are painted at PS x detail and drawn scaled down, so they stay smooth up close. */
+export const PS = 2;
 export const TW_ = 30, TH_ = 24, TOX = 15, TOY = 19;
 
 type Kind = 'auto' | 'bike' | 'car' | 'bus' | 'truck';
@@ -163,14 +165,23 @@ export function buildSheets(lineColors: string[]): Sheets {
   });
 
   // people: rows = look, columns = walk frame
-  const ppl = mkCanvas(PW * 2, PH * LOOK_COUNT);
+  const ppl = mkCanvas(PW * PS * 2, PH * PS * LOOK_COUNT);
   const pc = ppl.getContext('2d')!;
   OUTFITS.forEach(([body, legs, hair], oi) => SKIN.forEach((skin, si) => {
     for (let f = 0; f < 2; f++) {
-      const x = f * PW, y = (oi * SKIN.length + si) * PH;
+      const x = f * PW * PS, y = (oi * SKIN.length + si) * PH * PS;
       const r = (dx: number, dy: number, w: number, h: number, c: string) => { pc.fillStyle = c; pc.fillRect(x + dx, y + dy, w, h); };
-      r(1, 0, 1, 1, hair); r(1, 1, 1, 1, skin); r(0, 2, 3, 2, body); r(2, 2, 1, 2, shade(body, 0.8));
-      if (f) { r(0, 4, 1, 2, legs); r(2, 4, 1, 2, shade(legs, 0.85)); } else r(1, 4, 1, 2, legs);
+      const bs = shade(body, 0.8), ls = shade(legs, 0.85), shoe = '#2a2228';
+      // head: hair over a face, a touch of shade on the far cheek
+      r(2, 0, 2, 1, hair); r(2, 1, 2, 2, skin); r(3, 2, 1, 1, shade(skin, 0.88));
+      // torso with a shaded side
+      r(1, 3, 4, 5, body); r(4, 3, 1, 5, bs);
+      // arms: sleeves then hands; they swing opposite to the legs
+      if (f) { r(0, 3, 1, 2, body); r(0, 5, 1, 1, skin); r(5, 4, 1, 2, bs); r(5, 6, 1, 1, skin); }
+      else { r(0, 4, 1, 2, body); r(0, 6, 1, 1, skin); r(5, 3, 1, 2, bs); r(5, 5, 1, 1, skin); }
+      // legs and shoes: together on one frame, mid stride on the other
+      if (f) { r(1, 8, 1, 3, legs); r(4, 8, 1, 3, ls); r(1, 11, 1, 1, shoe); r(4, 11, 1, 1, shoe); r(2, 8, 2, 1, legs); }
+      else { r(2, 8, 1, 3, legs); r(3, 8, 1, 3, ls); r(2, 11, 2, 1, shoe); }
     }
   }));
 
@@ -183,10 +194,14 @@ export function buildSheets(lineColors: string[]): Sheets {
       const x0 = o * TW_, y0 = li * TH_;
       const r = (x: number, y: number, w: number, h: number, c: string, ctx = tc) => { ctx.fillStyle = c; ctx.fillRect(x0 + TOX + x, y0 + TOY + y, w, h); };
       if (o === 0) {
-        r(-10, -9, 20, 2, '#f8f9fa'); r(-10, -7, 20, 6, body); r(-10, -3, 20, 1, col);
-        r(-9, -6, 18, 2, glass); r(-9, -6, 18, 2, '#cfe0b8', tl);
+        r(-10, -9, 20, 1, '#dfe2e6'); r(-7, -10, 4, 1, '#c4c8cd'); r(3, -10, 4, 1, '#c4c8cd');
+        r(-10, -8, 20, 6, body); r(-10, -8, 1, 6, '#b8bcc2'); r(9, -8, 1, 6, '#c8ccd1');
+        for (const wx of [-9, -4, 1, 6]) { r(wx, -7, 3, 2, glass); r(wx, -7, 3, 2, '#ffe9b0', tl); }
+        for (const dx of [-6, 4]) { r(dx, -7, 2, 5, '#c9cdd2'); r(dx, -7, 2, 1, glass); }
+        r(-10, -4, 20, 1, col); r(-9, -2, 18, 1, '#4a4f57'); r(-8, -1, 4, 1, '#2b2e33'); r(4, -1, 4, 1, '#2b2e33');
       } else if (o === 2) {
-        r(-2, -15, 5, 9, '#f8f9fa'); r(-2, -6, 5, 5, body); r(-2, -2, 5, 1, col); r(-1, -5, 3, 2, glass); r(-1, -5, 3, 2, '#cfe0b8', tl);
+        r(-2, -15, 5, 9, '#dfe2e6'); r(2, -15, 1, 9, '#c9ccd1'); r(-1, -13, 3, 2, '#c4c8cd'); r(-1, -9, 3, 2, '#c4c8cd');
+        r(-2, -6, 5, 5, body); r(-1, -5, 3, 2, glass); r(-1, -5, 3, 2, '#ffe9b0', tl); r(-2, -3, 5, 1, col); r(-2, -1, 5, 1, '#3a3e45');
       } else {
         const p = new Small(TW_, TH_, TOX, TOY - 1);
         p.k = 0.4;

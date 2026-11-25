@@ -1,6 +1,7 @@
 // Game HUD: clock (live or game time), city pulse, passport of stamps, cards,
 // minimap, city events and the map views. All DOM; the only per-frame work is
 // a throttled tick.
+import { PW, PH, PS } from '../art/actors';
 import type { City, Place } from '../world/city';
 import type { Sim, Pick } from '../sim/sim';
 import type { Live } from '../sim/live';
@@ -350,7 +351,7 @@ export class UI {
     ctx.fillStyle = '#59585f'; ctx.fillRect(0, 62, 96, 34);
     const sh = this.r.sheets;
     if (pick.type === 'v') ctx.drawImage(sh.veh, 24, this.sim.veh.look[pick.i] * 20, 24, 20, 0, 4, 96, 80);
-    else if (pick.type === 'c') ctx.drawImage(sh.ppl, 0, this.sim.ppl.look[pick.i] * 8, 5, 8, 28, 16, 40, 64);
+    else if (pick.type === 'c') ctx.drawImage(sh.ppl, 0, this.sim.ppl.look[pick.i] * PH * PS, PW * PS, PH * PS, 30, 14, 36, 72);
     else ctx.drawImage(sh.train, 0, this.sim.trains[pick.i].line * 24, 30, 24, 3, 12, 90, 72);
   }
 

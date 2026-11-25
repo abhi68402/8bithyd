@@ -186,3 +186,83 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--teal); outl
 #viewInfo { margin-top: 6px; color: #6a5a6e; }
 #viewInfo:empty { display: none; }
 #credit { right: 12px; bottom: 124px; color: #fff7e0; text-shadow: 1px 1px 0 var(--ink); pointer-events: none !important; opacity: 0.85; }
+
+/* ---------- readability and device pass ----------
+   Silkscreen stays the voice of the HUD but never below 10px; long text uses
+   the system font. Everything sits inside the phone's safe area, touch screens
+   get 40px targets, and the layout steps down at 900px and 640px. */
+:root {
+  --sat: env(safe-area-inset-top, 0px); --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px);
+  --gap: 12px; --clockW: 196px;
+}
+html, body { height: 100%; height: 100dvh; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+#hud { font-size: 10px; line-height: 1.55; }
+.panel { padding: 9px 12px; box-shadow: 4px 4px 0 var(--shadow), inset 0 0 0 2px rgba(255, 255, 255, 0.35); }
+button { padding: 7px 10px; min-height: 30px; line-height: 1.2; }
+#brand { top: calc(var(--gap) + var(--sat)); left: calc(var(--gap) + var(--sal)); max-width: calc(100vw - var(--clockW) - var(--gap) * 3 - var(--sal) - var(--sar)); }
+#clock { top: calc(var(--gap) + var(--sat)); right: calc(var(--gap) + var(--sar)); width: var(--clockW); }
+#mini { right: calc(var(--gap) + var(--sar)); bottom: calc(var(--gap) + var(--sab)); }
+#pulse { left: calc(var(--gap) + var(--sal)); bottom: calc(var(--gap) + var(--sab)); }
+#passport { top: calc(var(--gap) + var(--sat)); bottom: calc(var(--gap) + var(--sab)); left: calc(var(--gap) + var(--sal)); width: min(340px, calc(100vw - var(--gap) * 2)); }
+#card { bottom: calc(var(--gap) + var(--sab)); }
+.title h1 { font-size: 18px; }
+.title p, #passportBtn, .menu .btn, #placeList h4, #toast, #report h2, #report .advisor b { font-size: 10px; }
+.title [lang='te'], .title [lang='hi'] { font-size: 13px; }
+#time { font-size: 28px; }
+#legend, #viewInfo { font-size: 10px; line-height: 1.5; }
+.place .nm span:last-child { font-size: 12px; }
+#cardBlurb, #report .advisor { font-size: 13px; line-height: 1.45; }
+#cardTe { font-size: 13px; }
+#search { font-size: 16px; } /* 16px stops iOS zooming into the field */
+.bootBox p, .bootTip, .bootFact { font-size: 10px; }
+.bootCredit { font-size: 9px; }
+.bootShare { font-size: 11px; padding: 10px 16px; }
+#festBadge span { font-size: 11px; }
+
+/* touch screens: bigger targets, no hover-only affordances */
+@media (pointer: coarse) {
+  button, #postcard .btnlike { min-height: 40px; }
+  .zoom button { min-height: 0; width: 40px; }
+  .row { gap: 8px; }
+}
+
+/* tablets and small laptops */
+@media (max-width: 900px) {
+  :root { --clockW: 176px; }
+  #time { font-size: 24px; }
+  #pulse { max-width: calc(100vw - 260px); }
+}
+
+/* phones */
+@media (max-width: 640px) {
+  :root { --gap: 8px; --clockW: 148px; }
+  #hud { font-size: 10px; }
+  .panel { padding: 7px 9px; }
+  .title h1 { font-size: 13px; letter-spacing: 0.04em; }
+  .title p { font-size: 9px; }
+  .title [lang='te'], .title [lang='hi'] { font-size: 12px; }
+  .menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: 100%; }
+  .menu .btn { justify-content: center; padding: 6px 4px; font-size: 9px; text-align: center; }
+  #festBadge { max-width: 100%; }
+  #time { font-size: 20px; }
+  #clock .row { gap: 5px; }
+  #clock button { padding: 4px 2px; }
+  #minimap { width: 112px; height: 52px; }
+  #card { bottom: calc(var(--gap) + var(--sab) + 78px); }
+  #toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; }
+}
+
+/* very narrow phones (320-340px wide) */
+@media (max-width: 340px) {
+  :root { --clockW: 136px; }
+  .menu { grid-template-columns: 1fr; }
+  .title p span[data-i18n] { display: none; }
+}
+
+/* short landscape phones: keep the map visible */
+@media (max-height: 500px) and (orientation: landscape) {
+  #pulse, #hint, #festBadge { display: none; }
+  #clock #scrub { display: none; }
+  .menu { display: flex; flex-wrap: wrap; }
+}

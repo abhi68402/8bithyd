@@ -11,7 +11,7 @@ import { TRAIN_CARS, type Sim, type Pick } from '../sim/sim';
 import type { Events } from '../sim/events';
 import { CITY_W, CITY_H, WORLD_H, TILE, TX, TY } from '../world/geo';
 import { hash2 } from '../world/rng';
-import { VW, VH, VOX, VOY, PW, PH, POX, POY, TW_, TH_, TOX, TOY, type Sheets } from '../art/actors';
+import { VW, VH, VOX, VOY, PW, PH, PS, POX, POY, TW_, TH_, TOX, TOY, type Sheets } from '../art/actors';
 
 export type Overlay = 'none' | 'roads' | 'metro' | 'traffic' | 'density' | 'landuse' | 'zones';
 export const ROAD_COL = ['#ff5a4f', '#ff8a3c', '#ffc23c', '#fff07a', '#e8f0ff', '#9fb4d0', '#6f7f98'];
@@ -179,12 +179,13 @@ export class Renderer {
 
       // walkers, then traffic; both sit under the building layer
       const ppl = sim.ppl, veh = sim.veh;
-      if (cam.zoom >= 1) {
+      // level of detail: below 1.5x a walker is a speck of a few screen pixels, so skip the draw calls
+      if (cam.zoom >= 1.5) {
         for (let i = 0; i < ppl.n; i++) {
           if (!ppl.tile[i]) continue;
           const x = ppl.x[i], y = ppl.y[i] / 2;
           if (x < ex0 || x > ex1 || y < ey0 || y > ey1) continue;
-          ctx.drawImage(sheets.ppl, ((sim.pStep[i] | 0) & 1) * PW, ppl.look[i] * PH, PW, PH, snap(x - POX), snap(y - POY), PW, PH);
+          ctx.drawImage(sheets.ppl, ((sim.pStep[i] | 0) & 1) * PW * PS, ppl.look[i] * PH * PS, PW * PS, PH * PS, snap(x - POX), snap(y - POY), PW, PH);
           drawn++;
         }
       }
@@ -323,6 +324,9 @@ export class Renderer {
   private drawTrains(sheet: HTMLCanvasElement, x0: number, x1: number, y0: number, y1: number, snap: (v: number) => number) {
     const { sim, ctx } = this;
     for (let i = 0; i < sim.trains.length; i++) {
+      // cull a whole train from one probe: cars sit within ~70 px of the second car
+      const c = sim.trainPos(i, 1), cx = c[0], cy = c[1] / 2;
+      if (cx < x0 - 70 || cx > x1 + 70 || cy < y0 - 70 || cy > y1 + 70) continue;
       for (let k = 0; k < TRAIN_CARS; k++) {
         const tp = sim.trainPos(i, k);
         const x = tp[0], y = tp[1] / 2;
@@ -354,7 +358,8 @@ export class Renderer {
       for (let k = 0; k < pr.length; k += 2) {
         const x = pr[k], y = pr[k + 1];
         if (x < x0 - 4 || x > x1 + 4 || y < y0 - 4 || y > y1 + LIFT + 4) continue;
-        ctx.fillRect(Math.round(x) - 1, Math.round(y) - LIFT, 2, LIFT);
+        const px = Math.round(x), py = Math.round(y);
+        ctx.fillRect(px - 1, py - LIFT, 3, LIFT); ctx.fillRect(px - 3, py - LIFT, 7, 2);
       }
       ctx.translate(0, -LIFT + 2);
       ctx.lineWidth = 8; ctx.strokeStyle = '#857f74'; ctx.stroke(this.deck[i]);
@@ -362,7 +367,8 @@ export class Renderer {
       ctx.translate(0, -2);
       ctx.lineWidth = 8; ctx.strokeStyle = '#d6d1c6'; ctx.stroke(this.deck[i]);
       ctx.lineWidth = 15; ctx.strokeStyle = '#efe9da'; ctx.stroke(this.halts[i]);
-      ctx.lineWidth = 1; ctx.strokeStyle = col; ctx.stroke(this.deck[i]);
+      ctx.lineWidth = 4; ctx.strokeStyle = '#6f6a62'; ctx.stroke(this.deck[i]);
+      ctx.lineWidth = 2; ctx.strokeStyle = '#a9a294'; ctx.stroke(this.deck[i]);
       ctx.restore();
     }
   }

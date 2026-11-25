@@ -41,7 +41,6 @@ for (const { dates, ...f } of FESTIVALS) EVENTS.push({ ...f, days: [], fest: tru
 
 const h1 = (n: number, s: number) => { const x = Math.sin(n * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
 const BRIGHT = ['#ff5a6e', '#ffd23f', '#5ad1ff', '#7dff8a', '#ff9f43', '#d98bff'];
-const CLOTHES = ['#e8e4d8', '#3f7ab5', '#d8433b', '#e8a02a', '#1f1f24', '#3fa07a', '#c94f9a', '#f4f2ea'];
 
 export interface Active { ev: CityEvent; sites: Place[]; t0: number }
 
@@ -106,17 +105,6 @@ export class Events {
             const w = 18 + h1(k, 3) * 26;
             ctx.fillRect(Math.round(ax - w / 2), Math.round(ay - w / 6), Math.round(w), Math.round(w / 3));
             ctx.fillRect(Math.round(ax - w / 3), Math.round(ay - w / 4), Math.round(w * 0.66), Math.round(w / 2));
-          }
-        }
-        if (a.ev.fx.includes('crowd')) {
-          for (let k = 0; k < a.ev.crowd; k++) {
-            const ang = h1(k, 4) * 6.283, rad = Math.sqrt(h1(k, 5)) * R;
-            const x = Math.round(px + Math.cos(ang) * rad * 1.3 + Math.sin(t * 0.5 + k) * 5);
-            const y = Math.round(py + (Math.sin(ang) * rad) / 2 + Math.cos(t * 0.4 + k * 1.7) * 3);
-            ctx.fillStyle = CLOTHES[k % CLOTHES.length];
-            ctx.fillRect(x, y - 3, 2, 3);
-            ctx.fillStyle = '#a86f47';
-            ctx.fillRect(x, y - 5, 2, 2);
           }
         }
       }

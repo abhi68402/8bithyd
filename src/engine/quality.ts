@@ -1,7 +1,8 @@
-// Graphics quality by device. A tier is picked once from what the browser
-// reveals about the hardware, then a small governor watches real frame times
-// and steps down if the device cannot keep up (and back up once, if it turns
-// out to have room). The visitor can also pin a tier.
+// Graphics quality. Every visitor gets the full-quality HIGH tier: sharp
+// close-up art, the whole crowd of vehicles and walkers, and a 2x canvas on
+// high-density screens. Nothing is lowered automatically. LOW and MEDIUM exist
+// only as an opt-in from the GFX button (or ?gfx=low|medium) for a visitor
+// whose device struggles.
 export interface Quality {
   name: 'LOW' | 'MEDIUM' | 'HIGH';
   /** Cap on device pixels per CSS pixel. */
@@ -25,29 +26,8 @@ export interface Quality {
 export const TIERS: Quality[] = [
   { name: 'LOW', dpr: 1, maxPixels: 1.3e6, hiRes: false, detailCap: 12, coarseCap: 28, tileCap: 70, fetches: 4, agents: 0.45, bakeMs: 4, rain: 0.4 },
   { name: 'MEDIUM', dpr: 2, maxPixels: 2.6e6, hiRes: false, detailCap: 18, coarseCap: 48, tileCap: 110, fetches: 6, agents: 0.75, bakeMs: 5.5, rain: 0.7 },
-  { name: 'HIGH', dpr: 2, maxPixels: 6e6, hiRes: true, detailCap: 26, coarseCap: 72, tileCap: 150, fetches: 8, agents: 1, bakeMs: 7, rain: 1 },
+  { name: 'HIGH', dpr: 2, maxPixels: 16e6, hiRes: true, detailCap: 26, coarseCap: 72, tileCap: 150, fetches: 8, agents: 1, bakeMs: 7, rain: 1 },
 ];
-
-export interface Device { memory?: number; cores?: number; mobile: boolean; saveData: boolean }
-
-/** 0 low, 1 medium, 2 high. */
-export function pickTier(d: Device): number {
-  const mem = d.memory ?? (d.mobile ? 4 : 8), cores = d.cores ?? (d.mobile ? 4 : 8);
-  if (d.saveData || mem <= 2 || cores <= 2) return 0;
-  if (d.mobile || mem <= 4 || cores <= 4) return 1;
-  return 2;
-}
-
-export function readDevice(): Device {
-  const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-  return {
-    memory: nav.deviceMemory,
-    cores: nav.hardwareConcurrency,
-    mobile: coarse && Math.min(screen.width, screen.height) < 900,
-    saveData: !!nav.connection?.saveData,
-  };
-}
 
 /** The pixel ratio to render at for a window of w x h CSS pixels. */
 export function renderDpr(q: Quality, w: number, h: number, deviceDpr: number): number {
@@ -58,63 +38,32 @@ export function renderDpr(q: Quality, w: number, h: number, deviceDpr: number): 
   return dpr >= 1.5 ? Math.floor(dpr * 2) / 2 : 1;
 }
 
-export type Choice = 'auto' | 0 | 1 | 2;
-const KEY = 'hyderabad-days.gfx';
-const WINDOW = 90; // frames per judgement
+export type Tier = 0 | 1 | 2;
+const HIGH: Tier = 2;
+// new key, so a lower tier left over from the old auto mode does not stick
+const KEY = 'hyderabad-days.gfx2';
 
 export class QualityManager {
-  choice: Choice = 'auto';
-  tier: number;
-  readonly deviceTier: number;
+  tier: Tier = HIGH;
   onChange: (q: Quality) => void = () => {};
-  private n = 0; private slow = 0; private work = 0;
-  private badWindows = 0; private goodWindows = 0; private ups = 1; private cool = 0;
 
-  constructor(device: Device, query: string) {
-    this.deviceTier = pickTier(device);
-    this.tier = this.deviceTier;
+  constructor(query: string) {
     const named = ['low', 'medium', 'high'].indexOf(new URLSearchParams(query).get('gfx') ?? '');
     let saved: string | null = null;
     try { saved = localStorage.getItem(KEY); } catch { /* storage blocked */ }
-    const pin = named >= 0 ? named : saved !== null && saved !== 'auto' ? Number(saved) : -1;
-    if (pin === 0 || pin === 1 || pin === 2) { this.choice = pin; this.tier = pin; }
+    const pin = named >= 0 ? named : saved === '0' || saved === '1' ? Number(saved) : HIGH;
+    this.tier = pin as Tier;
   }
 
   get q(): Quality { return TIERS[this.tier]; }
-  get label(): string { return this.choice === 'auto' ? `AUTO · ${this.q.name}` : this.q.name; }
+  get label(): string { return this.q.name; }
 
-  /** AUTO -> LOW -> MEDIUM -> HIGH -> AUTO */
-  cycle() { this.set(this.choice === 'auto' ? 0 : this.choice === 2 ? 'auto' : ((this.choice + 1) as Choice)); }
+  /** HIGH -> MEDIUM -> LOW -> HIGH */
+  cycle() { this.set(this.tier === 0 ? HIGH : ((this.tier - 1) as Tier)); }
 
-  set(c: Choice) {
-    this.choice = c;
-    try { localStorage.setItem(KEY, String(c)); } catch { /* storage blocked */ }
-    this.badWindows = this.goodWindows = this.n = this.slow = this.work = 0;
-    this.ups = 1;
-    this.go(c === 'auto' ? this.deviceTier : c);
-  }
-
-  private go(tier: number) {
-    if (tier === this.tier) { this.onChange(this.q); return; }
-    this.tier = tier;
-    this.cool = 3; // let caches settle before judging again
+  set(t: Tier) {
+    this.tier = t;
+    try { if (t === HIGH) localStorage.removeItem(KEY); else localStorage.setItem(KEY, String(t)); } catch { /* storage blocked */ }
     this.onChange(this.q);
-  }
-
-  /** Feed every frame: time since the last frame and time spent working, ms. `busy` = baking a burst of new map. */
-  frame(raw: number, work: number, busy: boolean) {
-    if (this.choice !== 'auto' || raw > 250) return; // pinned, or the tab was asleep
-    if (this.cool > 0) { this.cool -= raw / 1000; return; }
-    this.n++;
-    this.work += work;
-    if (raw > 26 && !busy) this.slow++;
-    if (this.n < WINDOW) return;
-    const slow = this.slow / this.n, work1 = this.work / this.n;
-    this.n = this.slow = this.work = 0;
-    if (slow > 0.3) { this.badWindows++; this.goodWindows = 0; }
-    else if (slow < 0.03 && work1 < 5) { this.goodWindows++; this.badWindows = 0; }
-    else { this.badWindows = 0; this.goodWindows = 0; }
-    if (this.badWindows >= 2 && this.tier > 0) { this.badWindows = 0; this.go(this.tier - 1); }
-    else if (this.goodWindows >= 10 && this.tier < this.deviceTier && this.ups > 0) { this.goodWindows = 0; this.ups--; this.go(this.tier + 1); }
   }
 }

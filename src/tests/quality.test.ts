@@ -1,25 +1,39 @@
-import { describe, it, expect } from 'vitest';
-import { pickTier, renderDpr, TIERS } from '../engine/quality';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { renderDpr, TIERS, QualityManager } from '../engine/quality';
 
 describe('graphics quality', () => {
-  it('ranks devices', () => {
-    expect(pickTier({ memory: 16, cores: 10, mobile: false, saveData: false })).toBe(2);
-    expect(pickTier({ mobile: false, saveData: false })).toBe(2);           // desktop Safari reveals nothing
-    expect(pickTier({ cores: 6, mobile: true, saveData: false })).toBe(1);   // any phone starts at medium
-    expect(pickTier({ memory: 4, cores: 8, mobile: false, saveData: false })).toBe(1);
-    expect(pickTier({ memory: 2, cores: 8, mobile: true, saveData: false })).toBe(0);
-    expect(pickTier({ memory: 8, cores: 2, mobile: false, saveData: false })).toBe(0);
-    expect(pickTier({ memory: 8, cores: 8, mobile: false, saveData: true })).toBe(0);
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    (globalThis as Record<string, unknown>).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+    };
   });
-  it('keeps the canvas inside its pixel budget, in half steps', () => {
+
+  it('starts every visitor at full quality', () => {
+    const q = new QualityManager('');
+    expect(q.label).toBe('HIGH');
+    expect(q.q.hiRes).toBe(true);
+    expect(q.q.agents).toBe(1);
+  });
+
+  it('only lowers quality when the visitor asks', () => {
+    expect(new QualityManager('?gfx=low').label).toBe('LOW');
+    const q = new QualityManager('');
+    q.cycle();
+    expect(q.label).toBe('MEDIUM');
+    expect(new QualityManager('').label).toBe('MEDIUM'); // remembered
+    q.cycle(); q.cycle();
+    expect(q.label).toBe('HIGH');
+    expect(new QualityManager('').label).toBe('HIGH');
+  });
+
+  it('keeps full 2x sharpness on big high-density screens', () => {
     expect(renderDpr(TIERS[2], 1440, 900, 2)).toBe(2);
+    expect(renderDpr(TIERS[2], 1728, 1117, 2)).toBe(2); // 16" laptop, full screen
+    expect(renderDpr(TIERS[2], 2560, 1440, 2)).toBe(2); // 27" display
     expect(renderDpr(TIERS[2], 1440, 900, 1)).toBe(1);
-    expect(renderDpr(TIERS[0], 390, 844, 3)).toBe(1);
-    expect(renderDpr(TIERS[1], 390, 844, 3)).toBe(2);
-    const d = renderDpr(TIERS[2], 2560, 1440, 2); // a 4K-class window
-    expect(d).toBeLessThan(2);
-    expect(d * 2).toBe(Math.round(d * 2));
-    expect(2560 * 1440 * d * d).toBeLessThanOrEqual(TIERS[2].maxPixels);
-    for (const q of TIERS) expect(renderDpr(q, 5000, 3000, 2)).toBe(1); // never below 1
+    for (const q of TIERS) expect(renderDpr(q, 5000, 3000, 2)).toBeGreaterThanOrEqual(1);
   });
 });

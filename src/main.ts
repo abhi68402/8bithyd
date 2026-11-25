@@ -12,7 +12,7 @@ import { Events } from './sim/events';
 import { UI } from './ui/ui';
 import { CityTools, addZonesButton } from './ui/tools';
 import { Extras } from './ui/extras';
-import { QualityManager, readDevice } from './engine/quality';
+import { QualityManager } from './engine/quality';
 import { buildSheets } from './art/actors';
 import { startBootScreen } from './ui/boot';
 import { t, onLang } from './ui/i18n';
@@ -63,11 +63,11 @@ async function boot() {
   const tools = new CityTools(city, sim, cam, renderer);
   // festival badge (real date) and postcard mode
   const extras = new Extras(city, sim, cam, live, events, canvas);
-  // graphics quality: chosen for this device, adjusted if frames run slow, or pinned by the visitor
-  const quality = new QualityManager(readDevice(), location.search);
+  // graphics quality: full quality for everyone; lower tiers only if the visitor picks them
+  const quality = new QualityManager(location.search);
   const gfx = document.createElement('button');
   gfx.id = 'gfxBtn';
-  gfx.title = 'Graphics quality. AUTO picks for this device and adapts to its frame rate.';
+  gfx.title = 'Graphics quality. HIGH is full quality; pick MEDIUM or LOW only if this device struggles.';
   const gfxRow = document.createElement('div');
   gfxRow.className = 'row';
   gfxRow.append(gfx);
@@ -116,7 +116,6 @@ async function boot() {
     extras.update(dt);
     renderer.draw();
     const work = performance.now() - w0;
-    quality.frame(raw, work, renderer.busy || cam.flying);
     if (stats.record) stats.samples.push(raw, work);
     acc += raw; n++; if (raw > worst) worst = raw;
     dbgT += raw;
@@ -126,7 +125,7 @@ async function boot() {
         dbg.textContent = `${stats.fps.toFixed(0)} fps  avg ${stats.avg.toFixed(1)}ms  worst ${worst.toFixed(1)}ms  cpu ${work.toFixed(1)}ms\n` +
           `zoom ${cam.zoom.toFixed(3)}  ${renderer.mode}  chunks ${renderer.visibleChunks} visible / ${chunks.detail.size} detail / ${chunks.coarse.size} coarse  baking ${renderer.pending}\n` +
           `tiles loaded ${city.loadedCount()}  entities ${renderer.drawnEntities}  bakes ${chunks.bakes}  boot ${bootMs.toFixed(0)}ms\n` +
-          `gfx ${quality.label}  ${canvas.width}x${canvas.height} @${cam.dpr}x  device tier ${quality.deviceTier}`;
+          `gfx ${quality.label}  ${canvas.width}x${canvas.height} @${cam.dpr}x`;
       }
       acc = 0; n = 0; worst = 0; dbgT = 0;
     }
