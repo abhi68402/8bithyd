@@ -58,11 +58,11 @@
 .hd-postcard-popup [class*="Popup-module__pixelPopupTitle"] {
   margin: 0 0 12px 0 !important;
   padding: 2px 38px 0 0 !important;
-  font-family: 'Silkscreen', ui-monospace, monospace !important;
-  font-size: 15px !important;
+  font-family: 'Pixelify Sans', 'Silkscreen', sans-serif !important;
+  font-size: 18px !important;
   font-weight: 700 !important;
-  line-height: 1.3 !important;
-  letter-spacing: 0.04em;
+  line-height: 1.25 !important;
+  letter-spacing: 0.03em;
   color: #f0a030 !important;
   text-align: left !important;
   word-break: break-word;
@@ -106,7 +106,7 @@
 
 #hud-root .hd-postcard-popup [class*="Popup-module__pixelPopupContent"],
 .hd-postcard-popup [class*="Popup-module__pixelPopupContent"] {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: 'Pixelify Sans', 'Noto Sans Telugu', 'Noto Sans Devanagari', sans-serif !important;
   min-width: 0;
 }
 
@@ -142,8 +142,8 @@
   justify-content: space-between;
   gap: 10px;
   min-height: 20px;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 12px;
+  font-family: 'Pixelify Sans', 'Noto Sans Telugu', 'Noto Sans Devanagari', sans-serif;
+  font-size: 13px;
   line-height: 1.4;
 }
 
@@ -185,8 +185,8 @@
   border-width: 2px !important;
   border-color: #5a4d7a !important;
   border-radius: 0 !important;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
-  font-size: 13px !important;
+  font-family: 'Pixelify Sans', 'Noto Sans Telugu', 'Noto Sans Devanagari', sans-serif !important;
+  font-size: 14px !important;
   font-weight: 700 !important;
   line-height: 1.15 !important;
   white-space: nowrap;

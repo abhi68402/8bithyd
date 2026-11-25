@@ -15,22 +15,23 @@
   --ed-teal-bg: #133131;
   --ed-rose: #e0524c;
   --ed-rose-bg: #361922;
-  --ed-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ed-sans: 'Pixelify Sans', 'Noto Sans Telugu', 'Noto Sans Devanagari', sans-serif;
 
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  height: 100%;
+  gap: 8px;
+  height: auto;
+  max-height: 100%;
   min-height: 0;
   flex: 1;
   overflow: hidden;
-  padding: 13px;
+  padding: 12px;
   background: var(--ed-panel);
   color: var(--ed-cream);
   border: 2px solid var(--ed-border);
   font-family: var(--ed-sans);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.4;
   box-sizing: border-box;
 }
 
@@ -112,11 +113,11 @@
 
 .ed-title {
   margin: 0;
-  font-family: 'Silkscreen', ui-monospace, monospace;
-  font-size: 13px;
+  font-family: var(--ed-sans);
+  font-size: 16px;
   font-weight: 700;
   color: var(--ed-marigold);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   line-height: 1.2;
 }
 

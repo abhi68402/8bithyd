@@ -1,5 +1,9 @@
 import '@fontsource/silkscreen/400.css';
 import '@fontsource/silkscreen/700.css';
+import '@fontsource/pixelify-sans/400.css';
+import '@fontsource/pixelify-sans/500.css';
+import '@fontsource/pixelify-sans/600.css';
+import '@fontsource/pixelify-sans/700.css';
 import 'pixel-retroui/dist/index.css';
 import './ui/styles.css';
 import { City } from './world/city';
@@ -33,7 +37,12 @@ async function boot() {
   say('boot.unroll');
   const t0 = performance.now();
   const fonts = Promise.race([
-    Promise.all([document.fonts.load('8px Silkscreen'), document.fonts.load('700 16px Silkscreen')]),
+    Promise.all([
+      document.fonts.load('8px Silkscreen'),
+      document.fonts.load('700 16px Silkscreen'),
+      document.fonts.load('500 14px "Pixelify Sans"'),
+      document.fonts.load('700 16px "Pixelify Sans"'),
+    ]),
     new Promise((r) => setTimeout(r, 1500)),
   ]);
   const city = await City.load();

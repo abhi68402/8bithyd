@@ -46,9 +46,9 @@
   --sal: env(safe-area-inset-left, 0px);
   --gap: 14px;
   --barH: 42px;
-  --ui-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ui-sans: 'Pixelify Sans', 'Noto Sans Telugu', 'Noto Sans Devanagari', 'Telugu Sangam MN', sans-serif;
 
-  font-family: 'Silkscreen', 'Noto Sans Devanagari', 'Kohinoor Devanagari', 'Devanagari Sangam MN', 'Mangal', ui-monospace, monospace;
+  font-family: var(--ui-sans);
 }
 
 * { box-sizing: border-box; }
@@ -63,7 +63,7 @@ html, body {
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  font-family: 'Silkscreen', 'Noto Sans Devanagari', 'Kohinoor Devanagari', 'Devanagari Sangam MN', 'Mangal', ui-monospace, monospace;
+  font-family: var(--ui-sans);
 }
 
 #city {
@@ -143,7 +143,7 @@ html, body {
 
 #hud-root [class*="Button-module__pixelButton"],
 #hud-root [class*="Dropdown-module__pixelButton"] {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.1;
   padding: 0 12px;
@@ -230,10 +230,12 @@ html, body {
 #hud-root [class*="Bubble-module__balloon"]:after,
 #hud-root [class*="Bubble-module__balloon"]:before { display: none !important; }
 #hud-root [class*="Popup-module__pixelPopupTitle"] {
-  font-family: 'Silkscreen', monospace !important;
-  font-size: 15px !important;
+  font-family: var(--ui-sans) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
   color: var(--marigold) !important;
   margin-bottom: 12px !important;
+  letter-spacing: 0.03em;
 }
 
 .hd-drop-list { display: flex; flex-direction: column; gap: 4px; }
@@ -517,8 +519,8 @@ html, body {
 .hd-view-chip.on { background: var(--marigold); color: var(--marigold-ink); border-color: var(--marigold); }
 .hd-view-bar { width: 100%; height: 3px; margin-bottom: 3px; }
 .hd-view-chip.on .hd-view-bar { opacity: 0.9; outline: 1px solid var(--ink); }
-.hd-view-label { font-size: 12px; font-weight: 700; line-height: 1.15; white-space: nowrap; }
-.hd-view-desc { font-size: 10.5px; line-height: 1.25; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+.hd-view-label { font-size: 13px; font-weight: 700; line-height: 1.15; white-space: nowrap; }
+.hd-view-desc { font-size: 11px; line-height: 1.2; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
 .hd-view-chip.on .hd-view-desc { color: #3a2b10; font-weight: 600; }
 
 /* ---------- 4. BOTTOM-RIGHT MINIMAP & ZOOM ---------- */
@@ -569,34 +571,38 @@ html, body {
 /* ---------- 5. LEFT DRAWER ---------- */
 .hud-drawer {
   position: absolute;
-  top: calc(var(--gap) + var(--sat) + var(--barH) + 38px);
-  bottom: calc(var(--gap) + var(--sab) + 66px);
+  top: calc(var(--gap) + var(--sat) + var(--barH) + 36px);
   left: calc(var(--gap) + var(--sal));
-  width: min(370px, calc(100vw - var(--gap) * 2));
+  width: min(356px, calc(100vw - var(--gap) * 2));
+  max-height: calc(100dvh - var(--gap) * 2 - var(--sat) - var(--sab) - var(--barH) - 104px);
+  display: flex;
+  flex-direction: column;
   pointer-events: auto;
   z-index: 28;
 }
 .hd-drawer-card {
-  height: 100%;
-  padding: 13px !important;
+  height: auto;
+  max-height: 100%;
+  padding: 12px !important;
   background: var(--panel-solid) !important;
   display: flex !important;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   overflow: hidden;
 }
 .hd-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.hd-drawer-head h2 { margin: 0; font-family: 'Silkscreen', monospace; font-size: 13px; font-weight: 700; color: var(--marigold); letter-spacing: 0.04em; }
-.hd-sub { margin: 0; font-size: 12px; color: var(--muted); }
+.hd-drawer-head h2 { margin: 0; font-family: var(--ui-sans); font-size: 16px; font-weight: 700; color: var(--marigold); letter-spacing: 0.03em; }
+.hd-sub { margin: 0; font-size: 13px; color: var(--muted); }
 .hd-sub b { color: var(--teal); }
 .hd-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: thin;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
 }
 
 .hd-acc-title {
@@ -897,16 +903,17 @@ html, body {
   .hd-dock-btn [class*="Dropdown-module__dropdownArrow"] { display: none !important; }
 
   .hud-dock-wrap { width: calc(100vw - var(--gap) * 2); }
-  .hd-views-bar { padding: 8px !important; }
+  .hd-views-bar { padding: 7px 8px !important; }
   .hd-views-row {
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
     overflow-x: auto;
-    gap: 6px;
+    gap: 5px;
     scrollbar-width: thin;
   }
-  .hd-view-chip { flex: 0 0 auto; min-width: 96px; }
+  .hd-view-chip { flex: 0 0 auto; min-width: 72px; padding: 6px 8px; align-items: center; text-align: center; }
+  .hd-view-desc { display: none; }
   .hd-dock {
     width: 100%;
     display: grid !important;
@@ -931,7 +938,7 @@ html, body {
     top: calc(var(--gap) + var(--sat) + var(--barH) + 38px);
   }
   .hud-drawer {
-    bottom: calc(var(--gap) + var(--sab) + 60px);
+    max-height: calc(100dvh - var(--gap) * 2 - var(--sat) - var(--sab) - var(--barH) - 100px);
   }
   .hud-inspector { bottom: calc(var(--gap) + var(--sab) + 60px); }
   .hd-portrait { width: 68px; height: 68px; }

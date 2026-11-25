@@ -6,9 +6,9 @@
 }
 
 .sp-ui-text {
-  font-family: var(--ui-sans, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif) !important;
+  font-family: var(--ui-sans, 'Pixelify Sans', sans-serif) !important;
   letter-spacing: 0.01em !important;
-  line-height: 1.4 !important;
+  line-height: 1.35 !important;
 }
 
 /* Enforce strict flat-2D RetroUI overrides scoped to SkyPanel */
@@ -20,7 +20,7 @@
   border-style: solid !important;
   border-width: 2px !important;
   border-radius: 0 !important;
-  font-family: var(--ui-sans, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif) !important;
+  font-family: var(--ui-sans, 'Pixelify Sans', sans-serif) !important;
 }
 
 .sp-root [class*="Button-module__pixelButton"] {
@@ -82,17 +82,17 @@
   color: var(--muted, #d4cce3);
 }
 
-/* Main Popover Card — overflow: visible on desktop so sideways flyout is never clipped */
+/* Main Popover Card — compact & overflow: visible on desktop so sideways flyout is never clipped */
 .sp-popover {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: min(352px, calc(100vw - var(--gap, 14px) * 2));
-  padding: 14px !important;
+  width: min(344px, calc(100vw - var(--gap, 14px) * 2));
+  padding: 12px !important;
   background: var(--panel-solid, #1b1626) !important;
   display: flex !important;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   z-index: 50;
   overflow: visible;
 }
@@ -304,18 +304,18 @@
   flex: none;
 }
 
-/* Item 4 Fix: Sideways LEFT Flyout on desktop (>= 680px) so controls below are NEVER blocked */
+/* Item 4 Fix: Compact horizontal 2-column Flyout to the LEFT on desktop (>= 680px) so it never sprawls vertically */
 .sp-flyout {
   position: absolute;
-  right: calc(100% + 10px);
-  top: 0;
-  width: 248px;
+  right: calc(100% + 8px);
+  top: -12px;
+  width: 372px;
   padding: 10px !important;
   background: var(--panel-solid, #1b1626) !important;
   border-color: var(--marigold, #f0a030) !important;
   display: flex !important;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   z-index: 55;
 }
 
@@ -350,24 +350,30 @@
 }
 
 .sp-preset-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
 }
 
 .sp-preset-btn {
   width: 100%;
   text-align: left;
   padding: 7px 8px;
-  font-family: var(--ui-sans, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
-  font-size: 12px;
+  font-family: var(--ui-sans, 'Pixelify Sans', sans-serif);
+  font-size: 13px;
   color: var(--cream, #f7efe0);
   background: var(--panel-alt, #28213a);
   border: 2px solid transparent;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   cursor: pointer;
+  min-width: 0;
+}
+
+.sp-preset-btn.live-on,
+.sp-preset-btn:first-child {
+  grid-column: 1 / -1;
 }
 
 .sp-preset-btn:hover {

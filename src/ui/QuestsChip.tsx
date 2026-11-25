@@ -13,6 +13,9 @@ const NO_SHADOW = 'transparent';
 
 export interface QuestsChipProps {
   summary: CityGameSummary;
+  /** Optional controlled open state so HUD panels coordinate without overlapping. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** Optional callback to fly the camera to an uncollected treasure clue. */
   onFlyTo?: (wx: number, wy: number, zoom?: number) => void;
   /** Optional callback to trigger a fun map Horn / Cheer ripple. */
@@ -44,13 +47,20 @@ const ChaiBadgeIcon: React.FC<{ size?: number }> = ({ size = 14 }) => (
 
 export const QuestsChip: React.FC<QuestsChipProps> = ({
   summary,
+  open: controlledOpen,
+  onOpenChange,
   onFlyTo,
   onHonk,
   onReset,
   className,
 }) => {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const open = controlledOpen ?? innerOpen;
+  const setOpen = (v: boolean) => {
+    setInnerOpen(v);
+    onOpenChange?.(v);
+  };
 
   const treasurePct = summary.treasuresTotal
     ? Math.round((summary.treasuresCollected / summary.treasuresTotal) * 100)

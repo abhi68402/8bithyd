@@ -242,6 +242,15 @@ export class UI {
 
   private setDrawer(tab: DrawerTab) {
     this.drawer = this.drawer === tab ? '' : tab;
+    if (this.drawer) {
+      this.actor = null;
+      this.building = null;
+      this.openId = '';
+      this.cardData = null;
+      this.r.selected = null;
+      this.r.selectedBuilding = null;
+      this.r.selectedPlace = -1;
+    }
     if (this.drawer === 'report') this.reportAcc = 9;
     this.renderHud();
   }

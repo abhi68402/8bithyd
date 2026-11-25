@@ -166,18 +166,19 @@ const NO_SHADOW = 'transparent';
 
 const OVERLAYS: { id: Overlay; label: string; desc: string; swatch: string }[] = [
   { id: 'roads', label: 'Roads', desc: 'All roads', swatch: '#ff8a3c' },
-  { id: 'metro', label: 'Metro', desc: 'Lines & walk', swatch: '#3b78d8' },
+  { id: 'metro', label: 'Metro', desc: '3 lines', swatch: '#3b78d8' },
   { id: 'traffic', label: 'Traffic', desc: 'Live flow', swatch: '#4cd964' },
-  { id: 'zones', label: 'Zones', desc: 'R / C / I mix', swatch: '#f0a030' },
-  { id: 'density', label: 'Density', desc: 'Floor area', swatch: '#f5963c' },
-  { id: 'landuse', label: 'Land Use', desc: 'Parks & water', swatch: '#5ac86e' },
-  { id: 'none', label: 'Standard', desc: 'Default view', swatch: '#5a4d7a' },
+  { id: 'zones', label: 'Zones', desc: 'R / C / I', swatch: '#f0a030' },
+  { id: 'density', label: 'Density', desc: 'Massing', swatch: '#f5963c' },
+  { id: 'landuse', label: 'Land Use', desc: 'Parks', swatch: '#5ac86e' },
+  { id: 'none', label: 'Standard', desc: 'Clear view', swatch: '#5a4d7a' },
 ];
 
 export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ state, actions }) => {
   const [search, setSearch] = useState('');
   const [skyOpen, setSkyOpen] = useState(false);
   const [viewsOpen, setViewsOpen] = useState(false);
+  const [questsOpen, setQuestsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [mmDown, setMmDown] = useState(false);
   const dockWrapRef = useRef<HTMLDivElement>(null);
@@ -197,6 +198,25 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
       window.removeEventListener('keydown', onKey);
     };
   }, [viewsOpen]);
+
+  // Keep UI panels clean and mutually exclusive when cards/postcards/drawers open
+  useEffect(() => {
+    if (state.card || state.postcard) {
+      setViewsOpen(false);
+      setSkyOpen(false);
+      setQuestsOpen(false);
+      setGuideOpen(false);
+    }
+  }, [state.card, state.postcard]);
+
+  useEffect(() => {
+    if (state.drawer !== '') {
+      setViewsOpen(false);
+      setSkyOpen(false);
+      setQuestsOpen(false);
+      setGuideOpen(false);
+    }
+  }, [state.drawer]);
 
   const groupedPlaces = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -250,6 +270,15 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
 
           <QuestsChip
             summary={state.questsSummary}
+            open={questsOpen}
+            onOpenChange={(v) => {
+              if (v) {
+                setViewsOpen(false);
+                setSkyOpen(false);
+                setGuideOpen(false);
+              }
+              setQuestsOpen(v);
+            }}
             onFlyTo={actions.flyToQuest}
             onHonk={actions.honkMap}
             onReset={actions.resetQuests}
@@ -262,7 +291,12 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             borderColor={BORDER}
             shadow={NO_SHADOW}
             title="How to play & explore"
-            onClick={() => setGuideOpen(true)}
+            onClick={() => {
+              setViewsOpen(false);
+              setSkyOpen(false);
+              setQuestsOpen(false);
+              setGuideOpen(true);
+            }}
           >
             <span>?<span className="hd-guide-word"> GUIDE</span></span>
           </Button>
@@ -280,7 +314,19 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
       <div className="hud-top-right">
         <SkyPanel
           open={skyOpen}
-          onToggleOpen={() => setSkyOpen((v) => !v)}
+          onToggleOpen={() =>
+            setSkyOpen((v) => {
+              const next = !v;
+              if (next) {
+                setViewsOpen(false);
+                setQuestsOpen(false);
+                setGuideOpen(false);
+                if (state.card) actions.closeCard();
+                if (window.innerWidth < 1100 && state.drawer) actions.setDrawer('');
+              }
+              return next;
+            })
+          }
           onClose={() => setSkyOpen(false)}
           state={state}
           actions={actions}
@@ -592,7 +638,19 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             aria-expanded={viewsOpen}
             aria-controls="viewsTray"
             title="Toggle Metro, Traffic, Roads or Zones map layers"
-            onClick={() => setViewsOpen((v) => !v)}
+            onClick={() =>
+              setViewsOpen((v) => {
+                const next = !v;
+                if (next) {
+                  setSkyOpen(false);
+                  setQuestsOpen(false);
+                  setGuideOpen(false);
+                  if (state.drawer) actions.setDrawer('');
+                  if (state.card) actions.closeCard();
+                }
+                return next;
+              })
+            }
           >
             <PixelIcon name="layers" size={15} />
             <span>{state.overlay !== 'none' ? activeOvLabel : 'Map Views'}</span>
