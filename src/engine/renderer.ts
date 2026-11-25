@@ -26,6 +26,8 @@ const COARSE_PAD = 96;
 const LIFT = 9;
 const CABLE_PAL = ['#ff5a6e', '#ffd23f', '#5ad1ff', '#7dff8a', '#d98bff'];
 const UPLIGHT_IDS = new Set(['charminar', 'golconda', 'birla-mandir', 'buddha', 'secretariat', 'high-court', 'chowmahalla']);
+const HALOGEN_IDS = new Set(['uppal', 'gachibowli', 'airport', 'cyber-towers', 'secretariat', 'sec-junction', 'nampally', 'financial-district', 'necklace-road']);
+const FLOOD_TOWER_IDS = new Set(['uppal', 'gachibowli', 'airport', 'cyber-towers', 'secretariat']);
 const CHAI_IDS = new Set(['charminar', 'laad-bazaar', 'abids', 'nampally', 'sec-junction', 'tank-bund', 'cyber-towers']);
 
 export class Renderer {
@@ -57,6 +59,7 @@ export class Renderer {
   private lmFountain: { x: number; y: number } | null = null;
   private lmAirport: { x: number; y: number } | null = null;
   private lmUplights: { x: number; y: number }[] = [];
+  private lmHalogens: Place[] = [];
   private lmChai: { x: number; y: number }[] = [];
   private landmarks: { p: Place; sp: Sprite; ax: number; ay: number; s: number; sortY: number }[] = [];
   game?: CityGame;
@@ -81,6 +84,7 @@ export class Renderer {
       if (p.id === 'lumbini') this.lmFountain = p;
       if (p.id === 'airport') this.lmAirport = p;
       if (UPLIGHT_IDS.has(p.id)) this.lmUplights.push(p);
+      if (HALOGEN_IDS.has(p.id)) this.lmHalogens.push(p);
       if (CHAI_IDS.has(p.id)) this.lmChai.push(p);
     }
     this.landmarks.sort((a, b) => a.sortY - b.sortY);
@@ -519,14 +523,45 @@ export class Renderer {
           ctx.ellipse(lx, ly - 10, 34, 18, 0, 0, 6.2832);
           ctx.fill();
         }
-        // traffic signal night glow
-        if (cam.zoom >= 1) {
+        // cool-white halogen stadium towers, airport aprons & boulevard pools at night
+        for (const hp of this.lmHalogens) {
+          const hx = hp.x, hy = hp.y / 2;
+          if (hx < x0 - 110 || hx > x1 + 110 || hy < y0 - 110 || hy > y1 + 110) continue;
+          const big = FLOOD_TOWER_IDS.has(hp.id);
+          ctx.fillStyle = big ? 'rgba(202,240,255,0.14)' : 'rgba(196,236,255,0.12)';
+          ctx.beginPath();
+          ctx.ellipse(hx, hy - 4, big ? 58 : 38, big ? 28 : 18, 0, 0, 6.2832);
+          ctx.fill();
+          if (big) {
+            ctx.fillStyle = 'rgba(220,248,255,0.09)';
+            ctx.beginPath();
+            ctx.moveTo(hx - 28, hy - 36); ctx.lineTo(hx + 8, hy + 6); ctx.lineTo(hx - 14, hy + 10);
+            ctx.moveTo(hx + 28, hy - 36); ctx.lineTo(hx + 14, hy + 10); ctx.lineTo(hx - 8, hy + 6);
+            ctx.fill();
+            ctx.fillStyle = '#f4fcff';
+            ctx.fillRect(Math.round(hx - 29), Math.round(hy - 37), 3, 2);
+            ctx.fillRect(Math.round(hx + 26), Math.round(hy - 37), 3, 2);
+          }
+        }
+        // high-mast intersection halogen towers & traffic signal glow
+        if (cam.zoom >= 0.45) {
+          let sigIdx = 0;
           for (const [k, [sx, sy]] of sim.signalPos) {
             const wy = sy / 2;
-            if (sx < x0 - 10 || sx > x1 + 10 || wy < y0 - 10 || wy > y1 + 10) continue;
-            const ph = sim.signalPhase(k);
-            ctx.fillStyle = ph === 0 ? 'rgba(76,217,100,0.55)' : ph === 2 ? 'rgba(255,77,77,0.55)' : 'rgba(255,204,51,0.55)';
-            ctx.fillRect(Math.round(sx) - 2, Math.round(wy) - 9, 4, 3);
+            if (sx < x0 - 24 || sx > x1 + 24 || wy < y0 - 24 || wy > y1 + 24) { sigIdx++; continue; }
+            if ((sigIdx++ & 1) === 0 || cam.zoom >= 1.2) {
+              ctx.fillStyle = 'rgba(195,236,255,0.15)';
+              ctx.beginPath();
+              ctx.ellipse(sx, wy, 20, 10, 0, 0, 6.2832);
+              ctx.fill();
+              ctx.fillStyle = '#eefaff';
+              ctx.fillRect(Math.round(sx) - 1, Math.round(wy) - 12, 2, 2);
+            }
+            if (cam.zoom >= 1) {
+              const ph = sim.signalPhase(k);
+              ctx.fillStyle = ph === 0 ? 'rgba(76,217,100,0.55)' : ph === 2 ? 'rgba(255,77,77,0.55)' : 'rgba(255,204,51,0.55)';
+              ctx.fillRect(Math.round(sx) - 2, Math.round(wy) - 9, 4, 3);
+            }
           }
         }
       }

@@ -431,9 +431,13 @@ export class Chunks {
       return;
     }
     if (e.kind === 4) {
-      // boulevard streetlamp post
+      // boulevard halogen streetlamp post
       if (lights) {
-        ctx.fillStyle = '#ffe5a3';
+        ctx.fillStyle = 'rgba(196,236,255,0.22)';
+        ctx.fillRect(sx - 5, sy - 2, 11, 4);
+        ctx.fillStyle = 'rgba(218,246,255,0.45)';
+        ctx.fillRect(sx - 2, sy - 10, 5, 4);
+        ctx.fillStyle = '#f2fbff';
         ctx.fillRect(sx - 1, sy - 9, 3, 2);
         return;
       }
@@ -617,13 +621,26 @@ export class Chunks {
     if (!c.s || (c.li >= t.nb && c.lei >= c.extras.length) || !this.timeLeft()) return;
     if (!c.l) {
       c.l = mkCanvas(c.s.width, c.s.height); c.lctx = c.l.getContext('2d')!; this.bakes++;
-      // street lamps: warm dots strung along the roads
+      // street lamps: cool high-mast halogen pools on expressways/bridges + warm amber sodium on local streets
       const g = c.lctx;
       g.setTransform(1, 0, 0, 0.5, -c.sx, -c.sy);
       g.lineCap = 'round';
-      for (const [maxCls, dash, w, col] of [[4, 26, 3.4, '#ffcf8a'], [5, 34, 2.4, '#e0a860']] as const) {
+      // 1. Wide soft halogen asphalt glow along highways, main corridors & bridges
+      g.beginPath();
+      for (const r of t.roads) if ((r.cls <= 1 || (r.flags & 2)) && !(r.flags & 4)) polyPath(g, r.p);
+      g.setLineDash([0.1, 30]); g.lineWidth = 11; g.strokeStyle = 'rgba(186,232,255,0.20)'; g.stroke();
+      // 2. Crisp cool-white halogen bulbs on major corridors, warm sodium beads on neighborhood streets
+      for (const [minCls, maxCls, dash, w, col] of [
+        [0, 1, 30, 3.8, '#e8f7ff'],
+        [2, 4, 26, 3.2, '#ffcf8a'],
+        [5, 5, 34, 2.4, '#e0a860'],
+      ] as const) {
         g.beginPath();
-        for (const r of t.roads) if ((maxCls === 4 ? r.cls <= 4 : r.cls === 5) && !(r.flags & 4)) polyPath(g, r.p);
+        for (const r of t.roads) {
+          const isBridge = (r.flags & 2) !== 0;
+          const match = minCls === 0 ? (r.cls <= 1 || isBridge) : (r.cls >= minCls && r.cls <= maxCls && !isBridge);
+          if (match && !(r.flags & 4)) polyPath(g, r.p);
+        }
         g.setLineDash([0.1, dash]); g.lineWidth = w; g.strokeStyle = col; g.stroke();
       }
       g.setLineDash([]);

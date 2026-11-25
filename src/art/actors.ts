@@ -54,6 +54,8 @@ class Small extends Painter {
   Y(u: number, v: number, z: number) { return this.oy + (u + v) * 8 * this.k - z * this.k; }
 }
 
+const isHalogenVehicle = (kind: Kind) => kind === 'car' || kind === 'bus' || kind === 'patrol' || kind === 'ambulance';
+
 /** Diagonal views: little iso boxes. dir 0=SE 1=SW 2=NW 3=NE. */
 function paintDiag(p: Painter, kind: Kind, color: string, dir: number) {
   const m = (a: number, b: number): [number, number] => dir === 0 ? [a, b] : dir === 1 ? [-b, a] : dir === 2 ? [-a, -b] : [b, -a];
@@ -73,7 +75,8 @@ function paintDiag(p: Painter, kind: Kind, color: string, dir: number) {
     p.face(s, b0, b1, k, z0, z1, c);
     if (glow) p.glowFace(s, b0, b1, k, z0, z1, glow);
   };
-  const lamps = (w: number, z: number) => { const c = front ? '#fff3c0' : '#e23a2a'; end(-w, w, z, z + 2.5, c, c); };
+  const headCol = isHalogenVehicle(kind) ? '#e8f7ff' : '#fff3c0';
+  const lamps = (w: number, z: number) => { const c = front ? headCol : '#e23a2a'; end(-w, w, z, z + 2.5, c, c); };
   const glass = '#2c3e52';
   if (kind === 'car' || kind === 'patrol') {
     box(-0.5, 0.5, -0.26, 0.26, 1, 6, color); lamps(0.26, 2);
@@ -146,10 +149,19 @@ function paintCard(c: CanvasRenderingContext2D, l: CanvasRenderingContext2D, kin
     if (kind === 'truck') r(f > 0 ? x : x + 4, -hgt - roofD, len - 4, hgt + roofD - 1, color === '#3f7ab5' ? '#c9ccd2' : '#9a7a52');
     r(x + 1, -1, 2, 1, '#1c1c22'); r(x + len - 3, -1, 2, 1, '#1c1c22');
     const fx = f > 0 ? x + len - 1 : x, bx = f > 0 ? x : x + len - 1;
-    r(fx, -3, 1, 1, '#fff3c0'); r(fx, -3, 1, 1, '#fff3c0', l);
-    // subtle forward headlight glow pool
-    l.fillStyle = 'rgba(255,240,180,0.22)';
-    l.fillRect(Math.round(VOX + (f > 0 ? fx + 1 : fx - 5)), Math.round(VOY - 3), 5, 3);
+    const hal = isHalogenVehicle(kind);
+    const headCol = hal ? '#eaf8ff' : '#fff3c0';
+    r(fx, -3, 1, 1, headCol); r(fx, -3, 1, 1, headCol, l);
+    // forward halogen / tungsten headlight glow cone
+    if (hal) {
+      l.fillStyle = 'rgba(196,238,255,0.24)';
+      l.fillRect(Math.round(VOX + (f > 0 ? fx + 1 : fx - 7)), Math.round(VOY - 4), 7, 4);
+      l.fillStyle = 'rgba(240,252,255,0.34)';
+      l.fillRect(Math.round(VOX + (f > 0 ? fx + 1 : fx - 4)), Math.round(VOY - 3), 4, 2);
+    } else {
+      l.fillStyle = 'rgba(255,240,180,0.22)';
+      l.fillRect(Math.round(VOX + (f > 0 ? fx + 1 : fx - 5)), Math.round(VOY - 3), 5, 3);
+    }
     r(bx, -3, 1, 1, '#e23a2a'); r(bx, -3, 1, 1, '#e23a2a', l);
     if (kind === 'bike' || kind === 'delivery') {
       r(-1, -hgt - 3, 2, 3, '#3f5f8a'); r(-1, -hgt - 5, 2, 2, '#22222a');
@@ -170,12 +182,20 @@ function paintCard(c: CanvasRenderingContext2D, l: CanvasRenderingContext2D, kin
       r(x + 1, -hgt - d, 2, 1, '#e23a2a'); r(x + 1, -hgt - d, 2, 1, '#ff4840', l);
     }
     if (kind !== 'bike' && kind !== 'delivery') r(x + 1, -hgt, wid - 2, Math.max(1, hgt - 3), south ? shade(glass, 1.2) : glass);
-    const lc = south ? '#fff3c0' : '#e23a2a';
+    const hal = isHalogenVehicle(kind);
+    const lc = south ? (hal ? '#eaf8ff' : '#fff3c0') : '#e23a2a';
     r(x, -2, 1, 1, lc); r(x + wid - 1, -2, 1, 1, lc);
     r(x, -2, 1, 1, lc, l); r(x + wid - 1, -2, 1, 1, lc, l);
     if (south) {
-      l.fillStyle = 'rgba(255,240,180,0.20)';
-      l.fillRect(Math.round(VOX + x - 1), Math.round(VOY - 1), wid + 2, 3);
+      if (hal) {
+        l.fillStyle = 'rgba(196,238,255,0.22)';
+        l.fillRect(Math.round(VOX + x - 2), Math.round(VOY - 1), wid + 4, 4);
+        l.fillStyle = 'rgba(240,252,255,0.34)';
+        l.fillRect(Math.round(VOX + x), Math.round(VOY - 1), wid, 2);
+      } else {
+        l.fillStyle = 'rgba(255,240,180,0.20)';
+        l.fillRect(Math.round(VOX + x - 1), Math.round(VOY - 1), wid + 2, 3);
+      }
     }
     if (kind === 'bike' || kind === 'delivery') {
       r(x, -hgt - 3, 2, 3, '#3f5f8a'); r(x, -hgt - 5, 2, 2, '#22222a');
@@ -236,6 +256,15 @@ export function buildSheets(lineColors: string[]): Sheets {
         paintDiag(p, row.kind, row.color, (d - 1) / 2);
         vc.drawImage(p.c, 0, 0);
         if (p.lc) vl.drawImage(p.lc, 0, 0);
+        // stepped halogen headlight beam ahead of diagonal front-facing vehicles (SE/SW/NW/NE)
+        if (isHalogenVehicle(row.kind)) {
+          const sx = d === 1 || d === 7 ? 1 : -1;
+          const sy = d === 1 || d === 3 ? 1 : -1;
+          vl.fillStyle = 'rgba(196,238,255,0.22)';
+          vl.fillRect(Math.round(VOX + sx * 4 - 2), Math.round(VOY + sy * 2 - 2), 5, 3);
+          vl.fillStyle = 'rgba(240,252,255,0.30)';
+          vl.fillRect(Math.round(VOX + sx * 3 - 1), Math.round(VOY + sy * 1.5 - 1), 3, 2);
+        }
       } else paintCard(vc, vl, row.kind, row.color, d);
       vc.restore(); vl.restore();
     }
