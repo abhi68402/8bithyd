@@ -123,7 +123,7 @@ function paintLand(ctx: Ctx, city: City, x0: number, y0: number, x1: number, y1:
   }
 }
 
-interface Extra { y: number; kind: 0 | 1; x: number; v: number; place?: Place }
+interface Extra { y: number; kind: 0 | 1 | 2 | 3 | 4; x: number; v: number; place?: Place }
 
 export interface DetailChunk {
   tx: number; ty: number; key: number;
@@ -204,6 +204,44 @@ export class Chunks {
       const sp = spriteFor(p.sprite);
       out.push({ y: p.y + (sp.fw + sp.fd) * 5 * (p.scale ?? 1), kind: 1, x: p.x, v: 0, place: p });
     }
+    // avenue trees, bus shelters, streetlamps & roadside carts along roads
+    for (let ri = 0; ri < tile.roads.length; ri++) {
+      const r = tile.roads[ri];
+      if (r.cls > 4 || (r.flags & 6) || r.total < 32) continue;
+      const p = r.p, off = ROAD_W[r.cls] / 2 + 3.5;
+      for (let k = 2; k < p.length; k += 2) {
+        const ax = p[k - 2], ay = p[k - 1], bx = p[k], by = p[k + 1];
+        const seg = Math.hypot(bx - ax, by - ay);
+        if (seg < 24) continue;
+        const nx = -(by - ay) / seg, ny = (bx - ax) / seg;
+        if (r.cls <= 3) {
+          const nTrees = Math.min(4, Math.floor(seg / 42));
+          for (let m = 1; m <= nTrees; m++) {
+            const h = hash2(ri * 17 + k, m + tile.key, 19);
+            if (h > 0.55) continue;
+            const f = m / (nTrees + 1);
+            const side = h < 0.27 ? 1 : -1;
+            const tx = ax + (bx - ax) * f + nx * off * side;
+            const ty = ay + (by - ay) * f + ny * off * side;
+            if (tx < ox || tx >= ox + TILE || ty < oy || ty >= oy + TILE) continue;
+            if (this.city.areaAt(tx, ty) === A_WATER) continue;
+            out.push({ y: ty, kind: 0, x: tx, v: ((h * 12) | 0) % 7 });
+          }
+        }
+        // roadside props at segment midpoint (bus shelter, streetlamp, or pushcart)
+        const mh = hash2(ri * 31 + k, tile.key, 43);
+        if (seg >= 34 && mh < 0.34) {
+          const side = mh < 0.17 ? 1 : -1;
+          const px = (ax + bx) * 0.5 + nx * (ROAD_W[r.cls] / 2 + 2.2) * side;
+          const py = (ay + by) * 0.5 + ny * (ROAD_W[r.cls] / 2 + 2.2) * side;
+          if (px >= ox && px < ox + TILE && py >= oy && py < oy + TILE && this.city.areaAt(px, py) !== A_WATER) {
+            if (r.cls <= 2 && mh < 0.08) out.push({ y: py, kind: 2, x: px, v: ((mh * 40) | 0) % 3 });
+            else if (r.cls <= 2 && mh < 0.26) out.push({ y: py, kind: 4, x: px, v: 0 });
+            else if (r.cls >= 3 && mh < 0.14) out.push({ y: py, kind: 3, x: px, v: ((mh * 50) | 0) % 4 });
+          }
+        }
+      }
+    }
     return out.sort((a, b) => a.y - b.y);
   }
 
@@ -254,16 +292,53 @@ export class Chunks {
       for (const p of list) polyPath(ctx, p);
       ctx.lineWidth = w; ctx.strokeStyle = col; ctx.stroke();
     };
-    for (let k = 6; k >= 0; k--) stroke(byClass[k], ROAD_W[k] + 2.6, '#b3a998');
+    for (let k = 6; k >= 0; k--) stroke(byClass[k], ROAD_W[k] + 2.6, k <= 2 ? '#c4baaa' : '#b3a998');
     if (S > 1) for (let k = 6; k >= 0; k--) stroke(byClass[k], ROAD_W[k] + 0.7, '#3c3b44'); // kerb shadow
     for (let k = 6; k >= 0; k--) stroke(byClass[k], ROAD_W[k], ASPHALT[k]);
-    for (let k = 3; k >= 0; k--) stroke(byClass[k], S > 1 ? 0.45 : 0.8, '#d8b84a');
+    // weathered lane patches on minor Old City & residential streets
+    ctx.setLineDash([2, 8]);
+    stroke(byClass[5], 1.6, 'rgba(130,122,110,0.28)');
+    stroke(byClass[6], 1.2, 'rgba(142,130,114,0.32)');
+    ctx.setLineDash([]);
+    // highway green median + crisp white shoulders
+    if (byClass[0].length) {
+      stroke(byClass[0], ROAD_W[0] - 1.2, 'rgba(236,232,220,0.35)');
+      stroke(byClass[0], ROAD_W[0] - 2.1, ASPHALT[0]);
+      stroke(byClass[0], 1.8, '#5a9a48');
+    }
+    // arterial white lane markings & yellow centerlines
+    for (const k of [1, 2]) {
+      if (!byClass[k].length) continue;
+      stroke(byClass[k], ROAD_W[k] - 1.1, 'rgba(240,236,222,0.3)');
+      stroke(byClass[k], ROAD_W[k] - 1.8, ASPHALT[k]);
+      ctx.setLineDash([4, 6]);
+      stroke(byClass[k], ROAD_W[k] * 0.52, 'rgba(240,236,222,0.42)');
+      ctx.setLineDash([]);
+      stroke(byClass[k], k === 1 ? 1.5 : S > 1 ? 0.55 : 0.85, '#d8b84a');
+      if (k === 1) stroke(byClass[k], 0.5, '#595860');
+    }
+    stroke(byClass[3], S > 1 ? 0.45 : 0.8, '#d8b84a');
     ctx.setLineDash([5, 7]);
     stroke(byClass[4], S > 1 ? 0.4 : 0.7, '#cfcab8');
     if (S > 1) { ctx.setLineDash([3, 6]); stroke(byClass[5], 0.3, 'rgba(225,220,205,0.5)'); }
     ctx.setLineDash([]);
+    // yellow-black speed breakers on connector & local streets
+    for (const k of [3, 4]) {
+      for (let i = 0; i < byClass[k].length; i++) {
+        if (hash2(i, c.key, 51 + k) > 0.28) continue;
+        const p = byClass[k][i];
+        if (p.length < 4) continue;
+        const mx = (p[0] + p[2]) * 0.5, my = (p[1] + p[3]) * 0.5;
+        const ang = Math.atan2(p[3] - p[1], p[2] - p[0]);
+        const nx = -Math.sin(ang) * (ROAD_W[k] * 0.42), ny = Math.cos(ang) * (ROAD_W[k] * 0.42);
+        ctx.strokeStyle = '#f0b828';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath(); ctx.moveTo(mx - nx, my - ny); ctx.lineTo(mx + nx, my + ny); ctx.stroke();
+      }
+    }
     for (const [k, p] of bridges) stroke([p], ROAD_W[k] + 4, '#d6d0c2');
     for (const [k, p] of bridges) stroke([p], ROAD_W[k], ASPHALT[k]);
+    for (const [k, p] of bridges) if (k <= 3) stroke([p], 0.6, '#d8b84a');
     // elevated metro viaducts
     // shadow of the elevated metro; the viaduct itself is drawn above the buildings
     for (const m of city.metro) stroke([m.p], 7, 'rgba(30,24,40,0.2)');
@@ -291,6 +366,45 @@ export class Chunks {
       if (!lights) ctx.drawImage(treeSheet!, e.v * TREE_W, 0, TREE_W, TREE_H, Math.round(e.x - ox - 5), Math.round(e.y / 2 - oy - 13), TREE_W, TREE_H);
       return;
     }
+    const sx = Math.round(e.x - ox), sy = Math.round(e.y / 2 - oy);
+    if (e.kind === 2) {
+      // TSRTC bus shelter
+      if (lights) {
+        ctx.fillStyle = 'rgba(220,245,255,0.65)';
+        ctx.fillRect(sx - 3, sy - 4, 6, 2);
+        return;
+      }
+      ctx.fillStyle = '#2a1f3a'; ctx.fillRect(sx - 4, sy - 5, 8, 5);
+      ctx.fillStyle = e.v === 1 ? '#34a86e' : '#1f8a8a'; ctx.fillRect(sx - 4, sy - 6, 8, 2);
+      ctx.fillStyle = '#f6ecd2'; ctx.fillRect(sx - 3, sy - 4, 6, 2);
+      ctx.fillStyle = '#5a4a6a'; ctx.fillRect(sx - 3, sy - 2, 1, 2); ctx.fillRect(sx + 2, sy - 2, 1, 2);
+      return;
+    }
+    if (e.kind === 3) {
+      // roadside pushcart / fruit & chai bandi
+      if (lights) {
+        ctx.fillStyle = 'rgba(255,210,115,0.65)';
+        ctx.fillRect(sx - 2, sy - 4, 4, 2);
+        return;
+      }
+      const cols = ['#d8433b', '#f0a030', '#3aa657', '#3b78d8'];
+      ctx.fillStyle = '#6b4a2e'; ctx.fillRect(sx - 3, sy - 2, 6, 2);
+      ctx.fillStyle = '#222026'; ctx.fillRect(sx - 2, sy, 1, 1); ctx.fillRect(sx + 1, sy, 1, 1);
+      ctx.fillStyle = cols[e.v % cols.length]; ctx.fillRect(sx - 3, sy - 5, 6, 2);
+      ctx.fillStyle = '#f6ecd2'; ctx.fillRect(sx - 1, sy - 5, 2, 1);
+      return;
+    }
+    if (e.kind === 4) {
+      // boulevard streetlamp post
+      if (lights) {
+        ctx.fillStyle = '#ffe5a3';
+        ctx.fillRect(sx - 1, sy - 9, 3, 2);
+        return;
+      }
+      ctx.fillStyle = '#363642'; ctx.fillRect(sx, sy - 9, 1, 9);
+      ctx.fillStyle = '#4e4e5c'; ctx.fillRect(sx - 1, sy - 9, 3, 1);
+      return;
+    }
     const p = e.place!, sp = spriteFor(p.sprite!), s = p.scale ?? 1;
     const src = lights ? sp.l : sp.c;
     if (!src) return;
@@ -312,10 +426,23 @@ export class Chunks {
       if (ax < minX) minX = ax; if (ax > maxX) maxX = ax;
       const dx = bx - ax;
       if (dx > -0.4) continue; // only south-facing walls are visible
+      if (!lights && h >= 5) {
+        // subtle SE ground shadow strip so buildings sit solidly on the street
+        ctx.beginPath();
+        ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+        ctx.lineTo(bx + 2, by + 1.2); ctx.lineTo(ax + 2, ay + 1.2);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(26,20,36,0.16)';
+        ctx.fill();
+      }
       ctx.beginPath();
       ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(bx, by - h); ctx.lineTo(ax, ay - h);
       if (lights) {
         if (h >= 6 && dx < -3) { ctx.fillStyle = kind === B_GLASS ? litCool! : litPat!; ctx.fill(); }
+        if ((kind === B_COMMERCIAL || (kind === B_HOUSE && hv < 0.35)) && dx < -4) {
+          ctx.fillStyle = 'rgba(255,205,120,0.35)';
+          ctx.fillRect(Math.round((ax + bx) / 2 - 2), Math.round((ay + by) / 2 - 2), 4, 2);
+        }
         continue;
       }
       const sl = (by - ay) / -dx;
@@ -342,9 +469,24 @@ export class Chunks {
       ctx.lineWidth = 0.5; ctx.strokeStyle = shade(pl[0], 0.8); ctx.stroke();
       if (w > 6 && kind !== B_INDUSTRIAL && kind !== B_SHED && kind !== B_RELIGIOUS) {
         const tx = Math.round((cx + (hv - 0.5) * w * 0.4) * 2) / 2, ty = Math.round((cy - h) * 2) / 2;
-        if (hv < 0.62) { ctx.fillStyle = '#1e1e24'; ctx.fillRect(tx, ty - 0.5, 1.5, 1.5); ctx.fillStyle = '#50505c'; ctx.fillRect(tx, ty - 0.5, 1.5, 0.5); }
+        if (hv < 0.72) {
+          // iconic blue Syntex or dark rooftop water tank
+          const blueTank = hv > 0.28;
+          ctx.fillStyle = blueTank ? '#1b649c' : '#1e1e24'; ctx.fillRect(tx, ty - 0.5, 1.5, 1.5);
+          ctx.fillStyle = blueTank ? '#4ea2e0' : '#50505c'; ctx.fillRect(tx, ty - 0.5, 1.5, 0.5);
+        }
         if (w > 11 && hv > 0.3) { ctx.fillStyle = shade(pl[0], 1.06); ctx.fillRect(tx - 3.5, ty - 1.5, 2.5, 2); ctx.fillStyle = shade(pl[0], 0.72); ctx.fillRect(tx - 3.5, ty + 0.5, 2.5, 0.5); }
-        if (kind === B_GLASS || h > 30) { ctx.fillStyle = '#9aa4ac'; ctx.fillRect(tx + 2.5, ty - 1, 2, 1.5); ctx.fillStyle = '#6c757c'; ctx.fillRect(tx + 2.5, ty + 0.5, 2, 0.5); }
+        if (kind === B_GLASS || kind === B_APART || h > 22) {
+          // rooftop solar array or HVAC units
+          const solar = hv > 0.55;
+          ctx.fillStyle = solar ? '#224a78' : '#9aa4ac'; ctx.fillRect(tx + 2.5, ty - 1, 2.5, 1.5);
+          ctx.fillStyle = solar ? '#cfd8e0' : '#6c757c'; ctx.fillRect(tx + 2.5, ty + 0.5, 2.5, 0.5);
+        }
+        if ((kind === B_HOUSE || kind === B_APART) && w > 10 && hv > 0.75) {
+          // colourful terrace laundry or potted greens
+          ctx.fillStyle = '#e25548'; ctx.fillRect(tx - 1.5, ty - 2, 1, 1);
+          ctx.fillStyle = '#5ab868'; ctx.fillRect(tx - 0.5, ty - 2, 1, 1);
+        }
       }
     }
     if (kind === B_RELIGIOUS && w > 7) {
@@ -352,9 +494,9 @@ export class Chunks {
       ctx.fillStyle = hv < 0.5 ? '#5fa48a' : '#f6f4ee';
       ctx.beginPath(); ctx.arc(cx, cy - h, r, Math.PI, 0); ctx.fill();
       ctx.fillStyle = '#d9b24a'; ctx.fillRect(Math.round(cx), Math.round(cy - h - r - 2), 1, 2);
-    } else if (!hi && w > 9 && hv < 0.45 && kind !== B_INDUSTRIAL) {
-      ctx.fillStyle = hv < 0.2 ? '#3a3a44' : shade(pl[0], 0.86);
-      ctx.fillRect(Math.round(cx + (hv - 0.2) * w * 0.6), Math.round(cy - h - 1), 2, 2);
+    } else if (!hi && w > 9 && hv < 0.55 && kind !== B_INDUSTRIAL) {
+      ctx.fillStyle = hv < 0.22 ? '#1f6da8' : hv < 0.35 ? '#3a3a44' : shade(pl[0], 0.86);
+      ctx.fillRect(Math.round(cx + (hv - 0.25) * w * 0.6), Math.round(cy - h - 1), 2, 2);
     }
     void B_COMMERCIAL; void B_CIVIC; void B_APART; void B_HOUSE;
   }

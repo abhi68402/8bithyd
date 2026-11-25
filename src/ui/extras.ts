@@ -22,9 +22,13 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') 
 export class Extras {
   private badge = el('button', 'panel', '');
   private postBtn = el('button', 'panel btn alt', 'POSTCARD');
+  private tourBtn = el('button', 'panel btn alt', 'TOUR');
   private modal = el('div', '');
   private acc = 0;
   private url = '';
+  private touring = false;
+  private tourIdx = 0;
+  private tourTimer = 0;
 
   constructor(private city: City, private sim: Sim, private cam: Camera, private live: Live, private events: Events, private canvas: HTMLCanvasElement) {
     this.badge.id = 'festBadge';
@@ -33,7 +37,10 @@ export class Extras {
 
     this.postBtn.id = 'postcardBtn';
     this.postBtn.onclick = () => this.postcard();
-    document.querySelector('#brand .menu')?.append(this.postBtn);
+    this.tourBtn.id = 'tourBtn';
+    this.tourBtn.title = 'Take a relaxing guided aerial tour of Hyderabad landmarks';
+    this.tourBtn.onclick = () => this.toggleTour();
+    document.querySelector('#brand .menu')?.append(this.postBtn, this.tourBtn);
 
     this.modal.id = 'postcard';
     this.modal.hidden = true;
@@ -46,6 +53,46 @@ export class Extras {
   update(dt: number) {
     this.acc += dt;
     if (this.acc > 30) { this.acc = 0; this.refresh(); }
+    if (this.touring) {
+      if (this.cam.dragging) { this.stopTour(); return; }
+      if (!this.cam.flying) {
+        this.tourTimer -= dt;
+        if (this.tourTimer <= 0) this.nextStop();
+      }
+    }
+  }
+
+  private static readonly TOUR_IDS = [
+    'charminar', 'mecca-masjid', 'golconda', 'buddha', 'cable-bridge', 'cyber-towers',
+    'birla-mandir', 'chowmahalla', 'falaknuma', 'sec-junction', 'uppal', 'airport',
+  ];
+
+  private toggleTour() {
+    if (this.touring) this.stopTour();
+    else {
+      this.touring = true;
+      this.tourIdx = 0;
+      this.tourBtn.classList.add('on');
+      this.tourBtn.textContent = 'STOP TOUR';
+      this.nextStop();
+    }
+  }
+
+  private stopTour() {
+    if (!this.touring) return;
+    this.touring = false;
+    this.tourBtn.classList.remove('on');
+    this.tourBtn.textContent = 'TOUR';
+  }
+
+  private nextStop() {
+    const id = Extras.TOUR_IDS[this.tourIdx % Extras.TOUR_IDS.length];
+    this.tourIdx++;
+    const p = this.city.places.find((q) => q.id === id);
+    if (!p) { this.stopTour(); return; }
+    const d = Math.hypot(p.x - this.cam.x, p.y / 2 - this.cam.y);
+    this.cam.flyTo(p.x, p.y / 2 - (p.lift ?? 30) / 3, 2, Math.min(2.6, 1.1 + d / 8000));
+    this.tourTimer = 5.5;
   }
 
   // ---------- festivals ----------

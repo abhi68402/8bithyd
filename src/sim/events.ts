@@ -4,7 +4,7 @@
 // All effects are procedural and cheap: a few hundred fillRects at most.
 import type { City, Place } from '../world/city';
 import type { Sim } from './sim';
-import type { Sheets } from '../art/actors';
+import { PW, PH, PS, POX, POY, LOOK_COUNT, UM_W, UM_H, UM_COUNT, type Sheets } from '../art/actors';
 import { FESTIVALS, festivalsOn, indiaToday } from './festivals';
 
 type Ctx = CanvasRenderingContext2D;
@@ -92,8 +92,9 @@ export class Events {
   }
 
   /** Things on the ground, drawn before buildings. World px (x, y/2). */
-  drawGround(ctx: Ctx, x0: number, y0: number, x1: number, y1: number) {
+  drawGround(ctx: Ctx, sheets: Sheets, x0: number, y0: number, x1: number, y1: number) {
     const t = this.sim.clock;
+    const raining = this.sim.rain > 0.35;
     for (const a of this.active) {
       for (const p of a.sites) {
         const px = p.x, py = p.y / 2, R = a.ev.r;
@@ -105,6 +106,20 @@ export class Events {
             const w = 18 + h1(k, 3) * 26;
             ctx.fillRect(Math.round(ax - w / 2), Math.round(ay - w / 6), Math.round(w), Math.round(w / 3));
             ctx.fillRect(Math.round(ax - w / 3), Math.round(ay - w / 4), Math.round(w * 0.66), Math.round(w / 2));
+          }
+        }
+        if (a.ev.fx.includes('crowd')) {
+          const count = Math.min(80, Math.round(a.ev.crowd * (raining ? 0.5 : 0.7)));
+          for (let k = 0; k < count; k++) {
+            const ang = h1(k, 4) * 6.283, rad = Math.sqrt(h1(k, 5)) * R * 0.9;
+            const x = Math.round(px + Math.cos(ang) * rad * 1.25 + Math.sin(t * 0.7 + k) * 4);
+            const y = Math.round(py + (Math.sin(ang) * rad) / 2 + Math.cos(t * 0.5 + k * 1.7) * 2.5);
+            const step = ((t * 4 + k) | 0) & 1;
+            const look = k % LOOK_COUNT;
+            ctx.drawImage(sheets.ppl, step * PW * PS, look * PH * PS, PW * PS, PH * PS, x - POX, y - POY, PW, PH);
+            if (raining) {
+              ctx.drawImage(sheets.umbrella, (k % UM_COUNT) * UM_W, 0, UM_W, UM_H, x - 2, y - POY - 2, UM_W, UM_H);
+            }
           }
         }
       }

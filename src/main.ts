@@ -1,18 +1,18 @@
 import '@fontsource/silkscreen/400.css';
 import '@fontsource/silkscreen/700.css';
+import 'pixel-retroui/dist/index.css';
 import './ui/styles.css';
 import { City } from './world/city';
 import { WORLD_W, WORLD_H } from './world/geo';
 import { Chunks } from './engine/chunks';
 import { Camera } from './engine/camera';
 import { Renderer } from './engine/renderer';
+import { CityAudio } from './engine/audio';
+import { QUALITY } from './engine/quality';
 import { Sim } from './sim/sim';
 import { Live } from './sim/live';
 import { Events } from './sim/events';
 import { UI } from './ui/ui';
-import { CityTools, addZonesButton } from './ui/tools';
-import { Extras } from './ui/extras';
-import { QualityManager } from './engine/quality';
 import { buildSheets } from './art/actors';
 import { startBootScreen } from './ui/boot';
 import { t, onLang } from './ui/i18n';
@@ -48,38 +48,20 @@ async function boot() {
   const sheets = buildSheets(city.metro.map((l) => l.color));
   say('boot.waking');
 
+  city.tileCap = QUALITY.tileCap;
+  city.maxFetch = QUALITY.fetches;
   const sim = new Sim(city);
   const live = new Live(sim);
   const events = new Events(city, sim);
   const cam = new Camera();
   const canvas = $('city') as HTMLCanvasElement;
   const renderer = new Renderer(canvas, city, chunks, sim, cam, sheets, events);
+  const audio = new CityAudio();
+  sim.onFlash = () => audio.thunder();
   cam.attach(canvas);
   live.set(!params.has('game'));
   live.tick();
-  addZonesButton();
-  const ui = new UI(city, sim, cam, renderer, chunks, live, events);
-  // city tools: zones view and neighbourhood report
-  const tools = new CityTools(city, sim, cam, renderer);
-  // festival badge (real date) and postcard mode
-  const extras = new Extras(city, sim, cam, live, events, canvas);
-  // graphics quality: full quality for everyone; lower tiers only if the visitor picks them
-  const quality = new QualityManager(location.search);
-  const gfx = document.createElement('button');
-  gfx.id = 'gfxBtn';
-  gfx.title = 'Graphics quality. HIGH is full quality; pick MEDIUM or LOW only if this device struggles.';
-  const gfxRow = document.createElement('div');
-  gfxRow.className = 'row';
-  gfxRow.append(gfx);
-  $('clock').append(gfxRow);
-  quality.onChange = (q) => {
-    renderer.setQuality(q);
-    sim.density = q.agents;
-    city.tileCap = q.tileCap; city.maxFetch = q.fetches;
-    gfx.textContent = `GFX: ${quality.label}`;
-  };
-  quality.onChange(quality.q);
-  gfx.onclick = () => quality.cycle();
+  const ui = new UI(city, sim, cam, renderer, chunks, live, events, audio);
   window.addEventListener('resize', () => renderer.resize());
   const start = city.places[0];
   if (!ui.fromHash()) {
@@ -112,9 +94,15 @@ async function boot() {
     sim.update(dt, live.on);
     events.update(dt);
     ui.update(dt);
-    tools.update(dt);
-    extras.update(dt);
     renderer.draw();
+    if (audio.on) {
+      let nearMetro = false;
+      for (let i = 0; i < sim.trains.length; i++) {
+        const tp = sim.trainPos(i, 1);
+        if (Math.hypot(tp[0] - cam.x, tp[1] / 2 - cam.y) < 350) { nearMetro = true; break; }
+      }
+      audio.update(dt, cam.zoom, sim.congestion(2), sim.activity, sim.rain, nearMetro);
+    }
     const work = performance.now() - w0;
     if (stats.record) stats.samples.push(raw, work);
     acc += raw; n++; if (raw > worst) worst = raw;
@@ -124,8 +112,8 @@ async function boot() {
       if (debug) {
         dbg.textContent = `${stats.fps.toFixed(0)} fps  avg ${stats.avg.toFixed(1)}ms  worst ${worst.toFixed(1)}ms  cpu ${work.toFixed(1)}ms\n` +
           `zoom ${cam.zoom.toFixed(3)}  ${renderer.mode}  chunks ${renderer.visibleChunks} visible / ${chunks.detail.size} detail / ${chunks.coarse.size} coarse  baking ${renderer.pending}\n` +
-          `tiles loaded ${city.loadedCount()}  entities ${renderer.drawnEntities}  bakes ${chunks.bakes}  boot ${bootMs.toFixed(0)}ms\n` +
-          `gfx ${quality.label}  ${canvas.width}x${canvas.height} @${cam.dpr}x`;
+          `tiles loaded ${city.loadedCount()}  entities ${renderer.drawnEntities}  signals ${sim.signalPos.size}  mmts ${sim.mmts.length}  bakes ${chunks.bakes}  boot ${bootMs.toFixed(0)}ms\n` +
+          `${canvas.width}x${canvas.height} @${cam.dpr}x`;
       }
       acc = 0; n = 0; worst = 0; dbgT = 0;
     }
@@ -136,8 +124,7 @@ async function boot() {
   await bootReady();
   $('boot').classList.add('done');
   setTimeout(() => $('boot').remove(), 600);
-  setTimeout(() => $('hint').classList.add('gone'), 9000);
-  (window as unknown as Record<string, unknown>).__hd = { city, chunks, sim, cam, renderer, ui, tools, quality, live, events, stats, bootMs, tLoad, tOverview };
+  (window as unknown as Record<string, unknown>).__hd = { city, chunks, sim, cam, renderer, ui, audio, live, events, stats, bootMs, tLoad, tOverview };
 }
 
 boot().catch((e) => {

@@ -1,10 +1,7 @@
-// Graphics quality. Every visitor gets the full-quality HIGH tier: sharp
-// close-up art, the whole crowd of vehicles and walkers, and a 2x canvas on
-// high-density screens. Nothing is lowered automatically. LOW and MEDIUM exist
-// only as an opt-in from the GFX button (or ?gfx=low|medium) for a visitor
-// whose device struggles.
+// Universal full-quality graphics configuration: sharp close-up art,
+// full vehicle/walker simulation, and 2x pixel-art rendering on high-density
+// screens for every visitor.
 export interface Quality {
-  name: 'LOW' | 'MEDIUM' | 'HIGH';
   /** Cap on device pixels per CSS pixel. */
   dpr: number;
   /** Cap on canvas size in device pixels; the pixel ratio drops to fit. */
@@ -23,47 +20,24 @@ export interface Quality {
   rain: number;
 }
 
-export const TIERS: Quality[] = [
-  { name: 'LOW', dpr: 1, maxPixels: 1.3e6, hiRes: false, detailCap: 12, coarseCap: 28, tileCap: 70, fetches: 4, agents: 0.45, bakeMs: 4, rain: 0.4 },
-  { name: 'MEDIUM', dpr: 2, maxPixels: 2.6e6, hiRes: false, detailCap: 18, coarseCap: 48, tileCap: 110, fetches: 6, agents: 0.75, bakeMs: 5.5, rain: 0.7 },
-  { name: 'HIGH', dpr: 2, maxPixels: 16e6, hiRes: true, detailCap: 26, coarseCap: 72, tileCap: 150, fetches: 8, agents: 1, bakeMs: 7, rain: 1 },
-];
+export const QUALITY: Quality = {
+  dpr: 2,
+  maxPixels: 16e6,
+  hiRes: true,
+  detailCap: 28,
+  coarseCap: 72,
+  tileCap: 160,
+  fetches: 8,
+  agents: 1,
+  bakeMs: 8,
+  rain: 1,
+};
 
 /** The pixel ratio to render at for a window of w x h CSS pixels. */
-export function renderDpr(q: Quality, w: number, h: number, deviceDpr: number): number {
+export function renderDpr(w: number, h: number, deviceDpr: number, q: Quality = QUALITY): number {
   let dpr = Math.min(q.dpr, deviceDpr || 1);
   const px = w * h * dpr * dpr;
   if (px > q.maxPixels) dpr = Math.max(1, Math.sqrt(q.maxPixels / (w * h)));
   // whole and half steps keep the pixel art even
   return dpr >= 1.5 ? Math.floor(dpr * 2) / 2 : 1;
-}
-
-export type Tier = 0 | 1 | 2;
-const HIGH: Tier = 2;
-// new key, so a lower tier left over from the old auto mode does not stick
-const KEY = 'hyderabad-days.gfx2';
-
-export class QualityManager {
-  tier: Tier = HIGH;
-  onChange: (q: Quality) => void = () => {};
-
-  constructor(query: string) {
-    const named = ['low', 'medium', 'high'].indexOf(new URLSearchParams(query).get('gfx') ?? '');
-    let saved: string | null = null;
-    try { saved = localStorage.getItem(KEY); } catch { /* storage blocked */ }
-    const pin = named >= 0 ? named : saved === '0' || saved === '1' ? Number(saved) : HIGH;
-    this.tier = pin as Tier;
-  }
-
-  get q(): Quality { return TIERS[this.tier]; }
-  get label(): string { return this.q.name; }
-
-  /** HIGH -> MEDIUM -> LOW -> HIGH */
-  cycle() { this.set(this.tier === 0 ? HIGH : ((this.tier - 1) as Tier)); }
-
-  set(t: Tier) {
-    this.tier = t;
-    try { if (t === HIGH) localStorage.removeItem(KEY); else localStorage.setItem(KEY, String(t)); } catch { /* storage blocked */ }
-    this.onChange(this.q);
-  }
 }
