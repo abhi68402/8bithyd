@@ -1,0 +1,589 @@
+/* EventsDrawer — Flat-2D symmetrical RetroUI styling (#1b1626 / #28213a / #f7efe0 / #f0a030 / #2dd4bf) */
+
+.ed-shell {
+  --ed-ink: #1b1626;
+  --ed-panel: #1b1626;
+  --ed-card: #28213a;
+  --ed-card-alt: #231c33;
+  --ed-hover: #322947;
+  --ed-recess: #130f1c;
+  --ed-border: #5a4d7a;
+  --ed-cream: #f7efe0;
+  --ed-muted: #d4cce3;
+  --ed-marigold: #f0a030;
+  --ed-teal: #2dd4bf;
+  --ed-teal-bg: #133131;
+  --ed-rose: #e0524c;
+  --ed-rose-bg: #361922;
+  --ed-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  padding: 13px;
+  background: var(--ed-panel);
+  color: var(--ed-cream);
+  border: 2px solid var(--ed-border);
+  font-family: var(--ed-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  box-sizing: border-box;
+}
+
+.ed-shell *,
+.ed-shell *::before,
+.ed-shell *::after {
+  box-sizing: border-box;
+}
+
+/* When mounted inside HudApp's existing .hd-drawer-card, avoid double border/padding */
+.hd-drawer-card > .ed-shell {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+/* Strict Flat-2D RetroUI Card & Button normalization (both inside and outside #hud-root) */
+.ed-shell [class*="Card-module__pixelCard"],
+#hud-root .ed-shell [class*="Card-module__pixelCard"],
+.ed-shell [class*="Button-module__pixelButton"],
+#hud-root .ed-shell [class*="Button-module__pixelButton"] {
+  margin: 0 !important;
+  box-shadow: none !important;
+  border-image: none !important;
+  border-style: solid !important;
+  border-width: 2px !important;
+  border-color: var(--ed-border) !important;
+  border-radius: 0 !important;
+  font-family: var(--ed-sans) !important;
+  letter-spacing: 0.01em;
+}
+
+.ed-shell [class*="Button-module__pixelButton"],
+#hud-root .ed-shell [class*="Button-module__pixelButton"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.ed-shell [class*="Button-module__pixelButton"]:hover,
+#hud-root .ed-shell [class*="Button-module__pixelButton"]:hover {
+  border-color: var(--ed-marigold) !important;
+}
+
+.ed-shell [class*="Button-module__pixelButton"]:active,
+#hud-root .ed-shell [class*="Button-module__pixelButton"]:active {
+  transform: translateY(1px);
+}
+
+.ed-shell [class*="Button-module__pixelButton"]:focus-visible,
+#hud-root .ed-shell [class*="Button-module__pixelButton"]:focus-visible,
+.ed-shell .ed-walk-btn:focus-visible {
+  outline: 2px solid var(--ed-teal);
+  outline-offset: 1px;
+}
+
+/* ---------- Drawer Header ---------- */
+.ed-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ed-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ed-title {
+  margin: 0;
+  font-family: 'Silkscreen', ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ed-marigold);
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.ed-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  background: var(--ed-teal-bg);
+  border: 2px solid var(--ed-teal);
+  color: var(--ed-teal);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.ed-live-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--ed-teal);
+  flex: none;
+}
+
+.ed-close-btn,
+#hud-root .ed-shell .ed-close-btn {
+  height: 32px !important;
+  width: 32px !important;
+  padding: 0 !important;
+  flex: none;
+}
+
+.ed-sub {
+  flex: none;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ed-muted);
+  line-height: 1.45;
+}
+
+/* ---------- Symmetrical 3-Tab Segmented Bar ---------- */
+.ed-tabs {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: var(--ed-recess);
+  border: 2px solid var(--ed-border);
+}
+
+.ed-tab,
+#hud-root .ed-shell .ed-tab {
+  width: 100%;
+  height: 32px !important;
+  padding: 0 6px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border-color: transparent !important;
+  gap: 5px !important;
+}
+
+.ed-tab:hover,
+#hud-root .ed-shell .ed-tab:hover {
+  border-color: var(--ed-border) !important;
+}
+
+.ed-tab.is-active,
+#hud-root .ed-shell .ed-tab.is-active {
+  border-color: var(--ed-marigold) !important;
+}
+
+.ed-tab-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--ed-teal);
+  flex: none;
+}
+
+.ed-tab.is-active .ed-tab-dot {
+  background: var(--ed-ink);
+}
+
+/* ---------- Scroll Area & Section Headers ---------- */
+.ed-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ed-border) var(--ed-recess);
+}
+
+.ed-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ed-scroll::-webkit-scrollbar-track {
+  background: var(--ed-recess);
+}
+
+.ed-scroll::-webkit-scrollbar-thumb {
+  background: var(--ed-border);
+}
+
+.ed-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ed-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ed-section-label {
+  font-family: 'Silkscreen', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ed-teal);
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
+.ed-section-meta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ed-muted);
+}
+
+/* ---------- Featured Festival Hero Card ---------- */
+.ed-hero-card,
+#hud-root .ed-shell .ed-hero-card {
+  padding: 12px !important;
+  background: var(--ed-card) !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ed-hero-card.is-live,
+#hud-root .ed-shell .ed-hero-card.is-live {
+  border-color: var(--ed-marigold) !important;
+  background: linear-gradient(180deg, #2e233e 0%, #28213a 100%) !important;
+}
+
+.ed-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ed-hero-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ed-marigold);
+}
+
+.ed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  border: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.ed-badge-live {
+  background: var(--ed-rose);
+  border-color: var(--ed-rose);
+  color: #ffffff;
+}
+
+.ed-badge-upcoming {
+  background: var(--ed-teal-bg);
+  border-color: var(--ed-teal);
+  color: var(--ed-teal);
+}
+
+.ed-hero-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ed-cream);
+  overflow-wrap: anywhere;
+}
+
+.ed-chip-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ed-loc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  background: var(--ed-recess);
+  border: 2px solid var(--ed-border);
+  color: var(--ed-teal);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.ed-blurb {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ed-muted);
+}
+
+.ed-hero-btn,
+#hud-root .ed-shell .ed-hero-btn {
+  width: 100%;
+  height: 36px !important;
+  padding: 0 12px !important;
+  border-color: var(--ed-marigold) !important;
+}
+
+.ed-hero-btn.is-preview,
+#hud-root .ed-shell .ed-hero-btn.is-preview {
+  border-color: var(--ed-teal) !important;
+}
+
+/* ---------- Symmetrical 2-Column Curated City Walks ---------- */
+.ed-walk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 8px;
+}
+
+.ed-walk-card,
+#hud-root .ed-shell .ed-walk-card {
+  height: 100%;
+  min-width: 0;
+  padding: 0 !important;
+  background: var(--ed-card) !important;
+  display: flex !important;
+  flex-direction: column;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.ed-walk-card:hover,
+#hud-root .ed-shell .ed-walk-card:hover {
+  border-color: var(--ed-marigold) !important;
+  background: var(--ed-hover) !important;
+}
+
+.ed-walk-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: var(--ed-sans);
+  text-align: left;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.ed-walk-btn:active {
+  transform: translateY(1px);
+}
+
+.ed-walk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.ed-district-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--ed-recess);
+  border: 2px solid var(--ed-border);
+  color: var(--ed-teal);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-walk-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ed-walk-name {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ed-cream);
+  overflow-wrap: anywhere;
+}
+
+.ed-walk-sub {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ed-muted);
+  overflow-wrap: anywhere;
+}
+
+.ed-walk-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 2px solid var(--ed-border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ed-marigold);
+}
+
+/* ---------- Symmetrical City Happenings Cards ---------- */
+.ed-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ed-event-card,
+#hud-root .ed-shell .ed-event-card {
+  padding: 11px !important;
+  background: var(--ed-card) !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ed-event-card.is-live,
+#hud-root .ed-shell .ed-event-card.is-live {
+  border-color: var(--ed-marigold) !important;
+  background: #2b223d !important;
+}
+
+.ed-event-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ed-cream);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ed-status-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  border: 2px solid var(--ed-border);
+  white-space: nowrap;
+}
+
+.ed-status-pill.is-live {
+  background: var(--ed-rose);
+  border-color: var(--ed-rose);
+  color: #ffffff;
+}
+
+.ed-status-pill.is-when {
+  background: var(--ed-recess);
+  border-color: var(--ed-border);
+  color: var(--ed-muted);
+}
+
+.ed-event-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ed-event-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+  padding-top: 2px;
+}
+
+.ed-event-actions.has-stop {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ed-act-btn,
+#hud-root .ed-shell .ed-act-btn {
+  width: 100%;
+  height: 34px !important;
+  padding: 0 10px !important;
+}
+
+.ed-act-btn.is-fly,
+#hud-root .ed-shell .ed-act-btn.is-fly {
+  border-color: var(--ed-marigold) !important;
+}
+
+.ed-act-btn.is-preview,
+#hud-root .ed-shell .ed-act-btn.is-preview {
+  border-color: var(--ed-border) !important;
+}
+
+.ed-act-btn.is-preview:hover,
+#hud-root .ed-shell .ed-act-btn.is-preview:hover {
+  border-color: var(--ed-teal) !important;
+  color: var(--ed-teal) !important;
+}
+
+.ed-act-btn.is-stop,
+#hud-root .ed-shell .ed-act-btn.is-stop {
+  border-color: var(--ed-rose) !important;
+}
+
+.ed-act-btn.is-stop:hover,
+#hud-root .ed-shell .ed-act-btn.is-stop:hover {
+  background: var(--ed-rose) !important;
+  color: #ffffff !important;
+  border-color: var(--ed-rose) !important;
+}
+
+/* ---------- Empty State ---------- */
+.ed-empty-card,
+#hud-root .ed-shell .ed-empty-card {
+  padding: 14px !important;
+  background: var(--ed-card-alt) !important;
+  text-align: center;
+}
+
+.ed-empty-text {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ed-muted);
+}

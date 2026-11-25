@@ -12,6 +12,7 @@ import { QUALITY } from './engine/quality';
 import { Sim } from './sim/sim';
 import { Live } from './sim/live';
 import { Events } from './sim/events';
+import { CityGame } from './sim/quests';
 import { UI } from './ui/ui';
 import { buildSheets } from './art/actors';
 import { startBootScreen } from './ui/boot';
@@ -53,15 +54,17 @@ async function boot() {
   const sim = new Sim(city);
   const live = new Live(sim);
   const events = new Events(city, sim);
+  const game = new CityGame(city.places);
   const cam = new Camera();
   const canvas = $('city') as HTMLCanvasElement;
   const renderer = new Renderer(canvas, city, chunks, sim, cam, sheets, events);
+  renderer.game = game;
   const audio = new CityAudio();
   sim.onFlash = () => audio.thunder();
   cam.attach(canvas);
   live.set(!params.has('game'));
   live.tick();
-  const ui = new UI(city, sim, cam, renderer, chunks, live, events, audio);
+  const ui = new UI(city, sim, cam, renderer, chunks, live, events, audio, game);
   window.addEventListener('resize', () => renderer.resize());
   const start = city.places[0];
   if (!ui.fromHash()) {
@@ -124,7 +127,7 @@ async function boot() {
   await bootReady();
   $('boot').classList.add('done');
   setTimeout(() => $('boot').remove(), 600);
-  (window as unknown as Record<string, unknown>).__hd = { city, chunks, sim, cam, renderer, ui, audio, live, events, stats, bootMs, tLoad, tOverview };
+  (window as unknown as Record<string, unknown>).__hd = { city, chunks, sim, cam, renderer, ui, audio, live, events, game, stats, bootMs, tLoad, tOverview };
 }
 
 boot().catch((e) => {

@@ -76,6 +76,13 @@ describe.skipIf(!hasMap)('built map data', () => {
     const b = city.places.find((p) => p.id === 'buddha')!;
     expect(city.areaAt(b.x + 60, b.y + 60)).toBe(0);
   });
+  it('places landmarks cleanly on accurate terrain without clear-zone buildings', () => {
+    const neck = city.places.find((p) => p.id === 'necklace-road')!;
+    expect(city.areaAt(neck.x, neck.y)).not.toBe(0);
+    const airport = city.places.find((p) => p.id === 'airport')!;
+    expect(city.areaAt(airport.x, airport.y)).not.toBe(0);
+    expect(airport.clear).toBeGreaterThanOrEqual(80);
+  });
   it('decodes every tile listed in the index, with roads joined at tile borders', () => {
     const files = readdirSync(MAP + 't');
     expect(files.length).toBe(json.tiles.length / 3);

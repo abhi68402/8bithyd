@@ -5,7 +5,6 @@ export type IconName =
   | 'layers'
   | 'report'
   | 'events'
-  | 'tour'
   | 'camera'
   | 'sun'
   | 'cloud'
@@ -50,12 +49,6 @@ export const PixelIcon: React.FC<{ name: IconName; size?: number; color?: string
       return (
         <svg {...p}>
           <path d="M7 1h2v3h3v2H9v3h3v2H9v3H7v-3H4V9h3V6H4V4h3V1z" />
-        </svg>
-      );
-    case 'tour':
-      return (
-        <svg {...p}>
-          <path d="M7 2h2v3h4v2H9v4l2 1v2H5v-2l2-1V7H3V5h4V2z" />
         </svg>
       );
     case 'camera':

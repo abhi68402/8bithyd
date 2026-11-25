@@ -157,10 +157,50 @@ export class Chunks {
   bakes = 0;
   private deadline = 0;
   private frame = 0;
+  private bldClear: [number, number, number][] = [];
+  private propClear: [number, number, number][] = [];
+  private tileClearCache = new WeakMap<Tile, [number, number, number][]>();
 
   constructor(private city: City) {
     initPatterns(mkCanvas(1, 1).getContext('2d')!);
     city.onEvict = (t) => this.dropDetail(t.key);
+    for (const p of city.places) {
+      if (!p.clear && !p.sprite) continue;
+      this.bldClear.push([p.x, p.y, Math.max(p.clear ?? 0, p.sprite ? 28 : 0)]);
+      this.propClear.push([p.x, p.y, Math.min(Math.max(p.clear ?? 0, p.sprite ? 22 : 0), 46)]);
+    }
+  }
+
+  private zonesForTile(t: Tile): [number, number, number][] {
+    let z = this.tileClearCache.get(t);
+    if (z) return z;
+    const x0 = t.tx * TILE - 180, x1 = (t.tx + 1) * TILE + 180;
+    const y0 = t.ty * TILE - 180, y1 = (t.ty + 1) * TILE + 180;
+    z = this.bldClear.filter(([zx, zy, zr]) => zx + zr >= x0 && zx - zr <= x1 && zy + zr >= y0 && zy - zr <= y1);
+    this.tileClearCache.set(t, z);
+    return z;
+  }
+
+  private clearedBuilding(t: Tile, i: number): boolean {
+    const zones = this.zonesForTile(t);
+    if (!zones.length) return false;
+    const n = t.bN[i], off = t.bOff[i], v = t.verts;
+    let cx = 0, cy = 0;
+    for (let k = 0; k < n; k++) { cx += v[off + k * 2]; cy += v[off + k * 2 + 1]; }
+    cx /= n; cy /= n;
+    for (const [zx, zy, zr] of zones) {
+      const dc = Math.hypot(cx - zx, cy - zy);
+      if (dc < zr) return true;
+      if (dc <= zr + 160) {
+        for (let k = 0; k < n; k++) if (Math.hypot(v[off + k * 2] - zx, v[off + k * 2 + 1] - zy) < zr) return true;
+      }
+    }
+    return false;
+  }
+
+  private clearedProp(x: number, y: number): boolean {
+    for (const [zx, zy, zr] of this.propClear) if (Math.hypot(x - zx, y - zy) < zr) return true;
+    return false;
   }
 
   beginFrame(ms: number) { this.deadline = performance.now() + ms; this.frame++; }
@@ -196,14 +236,10 @@ export class Chunks {
         const k = this.city.areaAt(x, y);
         const p = k === A_FOREST ? 0.75 : k === A_PARK ? 0.42 : k === A_SCRUB ? 0.14 : k === A_CEMETERY ? 0.2 : k === A_MIL ? 0.1 : k === A_GRASS ? 0.06
           : k === A_RES || k === A_COM ? (dense ? 0.012 : 0.04) : k === A_FARM ? 0.012 : k === -1 ? (dense ? 0.01 : 0.035) : 0;
-        if (h < p) out.push({ y, kind: 0, x, v: k === A_FOREST || k === A_PARK ? (hash2(gx, gy, 3) * 7) | 0 : (hash2(gx, gy, 3) * TREE_N) | 0 });
+        if (h < p && !this.clearedProp(x, y)) out.push({ y, kind: 0, x, v: k === A_FOREST || k === A_PARK ? (hash2(gx, gy, 3) * 7) | 0 : (hash2(gx, gy, 3) * TREE_N) | 0 });
       }
     }
-    for (const p of this.city.places) {
-      if (!p.sprite || Math.floor(p.x / TILE) !== tile.tx || Math.floor(p.y / TILE) !== tile.ty) continue;
-      const sp = spriteFor(p.sprite);
-      out.push({ y: p.y + (sp.fw + sp.fd) * 5 * (p.scale ?? 1), kind: 1, x: p.x, v: 0, place: p });
-    }
+    // Hero monuments are rendered unclipped across tile boundaries in Renderer.drawLandmarks
     // avenue trees, bus shelters, streetlamps & roadside carts along roads
     for (let ri = 0; ri < tile.roads.length; ri++) {
       const r = tile.roads[ri];
@@ -224,7 +260,7 @@ export class Chunks {
             const tx = ax + (bx - ax) * f + nx * off * side;
             const ty = ay + (by - ay) * f + ny * off * side;
             if (tx < ox || tx >= ox + TILE || ty < oy || ty >= oy + TILE) continue;
-            if (this.city.areaAt(tx, ty) === A_WATER) continue;
+            if (this.city.areaAt(tx, ty) === A_WATER || this.clearedProp(tx, ty)) continue;
             out.push({ y: ty, kind: 0, x: tx, v: ((h * 12) | 0) % 7 });
           }
         }
@@ -234,7 +270,7 @@ export class Chunks {
           const side = mh < 0.17 ? 1 : -1;
           const px = (ax + bx) * 0.5 + nx * (ROAD_W[r.cls] / 2 + 2.2) * side;
           const py = (ay + by) * 0.5 + ny * (ROAD_W[r.cls] / 2 + 2.2) * side;
-          if (px >= ox && px < ox + TILE && py >= oy && py < oy + TILE && this.city.areaAt(px, py) !== A_WATER) {
+          if (px >= ox && px < ox + TILE && py >= oy && py < oy + TILE && this.city.areaAt(px, py) !== A_WATER && !this.clearedProp(px, py)) {
             if (r.cls <= 2 && mh < 0.08) out.push({ y: py, kind: 2, x: px, v: ((mh * 40) | 0) % 3 });
             else if (r.cls <= 2 && mh < 0.26) out.push({ y: py, kind: 4, x: px, v: 0 });
             else if (r.cls >= 3 && mh < 0.14) out.push({ y: py, kind: 3, x: px, v: ((mh * 50) | 0) % 4 });
@@ -513,7 +549,7 @@ export class Chunks {
       const nextE = c.ei < c.extras.length ? c.extras[c.ei].y : Infinity;
       if (nextB === Infinity && nextE === Infinity) { c.sctx = null; break; }
       if (nextE <= nextB) this.drawExtra(ctx, c.extras[c.ei++], c.sx, c.sy, false);
-      else this.drawBuilding(ctx, t, c.bi++, c.sx, c.sy, false);
+      else { const bi = c.bi++; if (!this.clearedBuilding(t, bi)) this.drawBuilding(ctx, t, bi, c.sx, c.sy, false); }
       if ((guard & 31) === 31 && !this.timeLeft()) break;
     }
   }
@@ -541,7 +577,7 @@ export class Chunks {
       const nextE = c.hei < c.extras.length ? c.extras[c.hei].y : Infinity;
       if (nextB === Infinity && nextE === Infinity) { c.hctx = null; break; }
       if (nextE <= nextB) this.drawExtra(ctx, c.extras[c.hei++], c.sx, c.sy, false);
-      else this.drawBuilding(ctx, t, c.hbi++, c.sx, c.sy, false, true);
+      else { const bi = c.hbi++; if (!this.clearedBuilding(t, bi)) this.drawBuilding(ctx, t, bi, c.sx, c.sy, false, true); }
       if ((guard & 15) === 15 && !this.timeLeft()) break;
     }
   }
@@ -595,7 +631,7 @@ export class Chunks {
     }
     const ctx = c.lctx!;
     for (let guard = 0; ; guard++) {
-      if (c.li < t.nb) this.drawBuilding(ctx, t, c.li++, c.sx, c.sy, true);
+      if (c.li < t.nb) { const li = c.li++; if (!this.clearedBuilding(t, li)) this.drawBuilding(ctx, t, li, c.sx, c.sy, true); }
       else if (c.lei < c.extras.length) this.drawExtra(ctx, c.extras[c.lei++], c.sx, c.sy, true);
       else { c.lctx = null; break; }
       if ((guard & 63) === 63 && !this.timeLeft()) break;
@@ -629,15 +665,6 @@ export class Chunks {
     ctx.restore();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.paintBlocks(ctx, lx, Math.floor(ox / CELL), Math.floor(oy / CELL), COARSE / CELL, CELL / COARSE_S, COARSE_PAD, 1.3);
-    for (const p of city.places) {
-      if (!p.sprite || p.x < ox || p.x >= ox + COARSE || p.y < oy || p.y >= oy + COARSE) continue;
-      const sp = spriteFor(p.sprite), s = Math.max(0.4, (p.scale ?? 1) * 0.5);
-      const ax = sp.ox + (sp.fw - sp.fd) * 8, ay = sp.oy + (sp.fw + sp.fd) * 4;
-      const dx = Math.round((p.x - ox) / COARSE_S - ax * s), dy = Math.round(COARSE_PAD + (p.y - oy) / COARSE_S / 2 - ay * s);
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(sp.c, dx, dy, sp.c.width * s, sp.c.height * s);
-      if (sp.l) lx.drawImage(sp.l, dx, dy, sp.c.width * s, sp.c.height * s);
-    }
     c = { cx, cy, c: cv, l: lv, used: this.frame };
     this.coarse.set(key, c);
     return c;

@@ -1,0 +1,270 @@
+/* Flat-2D styling for PostcardModal (pixel-retroui Popup + Button overrides).
+ * Paired selectors ensure styles hold both inside #hud-root (overriding styles.css)
+ * and when PostcardModal is rendered standalone outside #hud-root. */
+
+#hud-root .hd-postcard-popup,
+.hd-postcard-popup {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 90 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 16px !important;
+  background: rgba(14, 10, 22, 0.78) !important;
+  pointer-events: auto !important;
+  box-sizing: border-box;
+}
+
+#hud-root .hd-postcard-popup [class*="Popup-module__pixelPopup___"],
+.hd-postcard-popup [class*="Popup-module__pixelPopup___"] {
+  width: min(740px, calc(100vw - 32px)) !important;
+  max-width: 100% !important;
+  max-height: calc(100dvh - 32px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-image: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: #1b1626 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+#hud-root .hd-postcard-popup [class*="Popup-module__pixelPopupInner___"],
+.hd-postcard-popup [class*="Popup-module__pixelPopupInner___"] {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  max-height: calc(100dvh - 32px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  margin: 0 !important;
+  padding: 16px !important;
+  background: #1b1626 !important;
+  color: #f7efe0 !important;
+  border: 2px solid #5a4d7a !important;
+  border-image: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+}
+
+#hud-root .hd-postcard-popup [class*="Popup-module__pixelPopupTitle"],
+.hd-postcard-popup [class*="Popup-module__pixelPopupTitle"] {
+  margin: 0 0 12px 0 !important;
+  padding: 2px 38px 0 0 !important;
+  font-family: 'Silkscreen', ui-monospace, monospace !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  letter-spacing: 0.04em;
+  color: #f0a030 !important;
+  text-align: left !important;
+  word-break: break-word;
+}
+
+#hud-root .hd-postcard-popup [class*="Popup-module__pixelPopupCloseButton"],
+.hd-postcard-popup [class*="Popup-module__pixelPopupCloseButton"] {
+  position: absolute !important;
+  top: 12px !important;
+  right: 12px !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #28213a !important;
+  color: #f7efe0 !important;
+  border: 2px solid #5a4d7a !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  font-family: 'Silkscreen', ui-monospace, monospace !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  cursor: pointer;
+  z-index: 2;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+#hud-root .hd-postcard-popup [class*="Popup-module__pixelPopupCloseButton"]:hover,
+.hd-postcard-popup [class*="Popup-module__pixelPopupCloseButton"]:hover {
+  border-color: #f0a030 !important;
+  color: #f0a030 !important;
+}
+
+#hud-root .hd-postcard-popup [class*="Popup-module__pixelPopupCloseButton"]:focus-visible,
+.hd-postcard-popup [class*="Popup-module__pixelPopupCloseButton"]:focus-visible {
+  outline: 2px solid #2dd4bf;
+  outline-offset: 2px;
+}
+
+#hud-root .hd-postcard-popup [class*="Popup-module__pixelPopupContent"],
+.hd-postcard-popup [class*="Popup-module__pixelPopupContent"] {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+  min-width: 0;
+}
+
+.hd-postcard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hd-postcard-frame {
+  width: 100%;
+  background: #130f1c;
+  border: 2px solid #5a4d7a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.hd-postcard-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(58dvh, 520px);
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.hd-postcard-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 20px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.hd-postcard-caption {
+  color: #d4cce3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hd-postcard-status {
+  flex: none;
+  color: #2dd4bf;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.hd-postcard-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#hud-root .hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"],
+.hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"] {
+  width: 100%;
+  margin: 0 !important;
+  padding: 9px 12px !important;
+  min-height: 40px;
+  height: auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px;
+  box-shadow: none !important;
+  border-image: none !important;
+  border-style: solid !important;
+  border-width: 2px !important;
+  border-color: #5a4d7a !important;
+  border-radius: 0 !important;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1.15 !important;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+#hud-root .hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"]:hover:not(:disabled),
+.hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"]:hover:not(:disabled) {
+  border-color: #f0a030 !important;
+}
+
+#hud-root .hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"]:active:not(:disabled),
+.hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"]:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+#hud-root .hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"]:disabled,
+.hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"]:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+#hud-root .hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"]:focus-visible,
+.hd-postcard-popup .hd-postcard-actions [class*="Button-module__pixelButton"]:focus-visible {
+  outline: 2px solid #2dd4bf;
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  #hud-root .hd-postcard-popup,
+  .hd-postcard-popup {
+    padding: 10px !important;
+  }
+
+  #hud-root .hd-postcard-popup [class*="Popup-module__pixelPopup___"],
+  .hd-postcard-popup [class*="Popup-module__pixelPopup___"] {
+    width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+  }
+
+  #hud-root .hd-postcard-popup [class*="Popup-module__pixelPopupInner___"],
+  .hd-postcard-popup [class*="Popup-module__pixelPopupInner___"] {
+    max-height: calc(100dvh - 20px) !important;
+    padding: 12px !important;
+  }
+
+  .hd-postcard-img {
+    max-height: min(48dvh, 380px);
+  }
+
+  .hd-postcard-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .hd-postcard-caption {
+    white-space: normal;
+  }
+
+  .hd-postcard-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hd-postcard-close-btn {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 340px) {
+  .hd-postcard-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 520px) {
+  .hd-postcard-img {
+    max-height: 44dvh;
+  }
+}

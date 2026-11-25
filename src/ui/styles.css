@@ -306,6 +306,11 @@ html, body {
   font-family: 'Silkscreen', monospace !important;
   font-size: 10px !important;
 }
+.hd-quests-chip {
+  height: var(--barH);
+  padding: 0 10px !important;
+  gap: 6px !important;
+}
 
 .hd-pulse-pill {
   height: 30px;
@@ -328,7 +333,7 @@ html, body {
   top: calc(var(--gap) + var(--sat));
   right: calc(var(--gap) + var(--sar));
   pointer-events: auto;
-  z-index: 35;
+  z-index: 45;
 }
 .hd-sky-pill {
   height: var(--barH);
@@ -692,7 +697,8 @@ html, body {
 }
 .hud-hint.gone { opacity: 0; }
 
-.hd-guide-popup [class*="Popup-module__pixelPopup___"] {
+.hd-guide-popup [class*="Popup-module__pixelPopup___"],
+.hd-quests-popup [class*="Popup-module__pixelPopup___"] {
   width: min(500px, calc(100vw - 28px));
   max-height: calc(100dvh - 28px);
   overflow-y: auto;
@@ -805,14 +811,25 @@ html, body {
   #minimap { width: 140px; height: 64px; }
 }
 
+@media (max-width: 1020px) {
+  .hd-brand-te, .hd-brand-sep, .hd-stamps-word { display: none !important; }
+  .hd-brand-pill { gap: 8px !important; }
+}
+
 @media (max-width: 760px) {
   :root { --gap: 8px; --barH: 38px; }
-  .hd-brand-te, .hd-brand-sep, .hd-brand-days, .hd-stamps-word, .hd-guide-word, .hd-pulse-pill, .hud-hint, .hd-credit { display: none !important; }
-  .hd-brand-pill { padding: 0 9px !important; gap: 7px !important; }
-  .hd-brand-title { font-size: 11px; }
-  .hd-brand-stamps { font-size: 10px; color: var(--marigold); }
+  .hd-brand-days, .hd-guide-word, .hd-pulse-pill, .hud-hint, .hd-credit { display: none !important; }
+  .hd-top-row {
+    flex-wrap: wrap;
+    max-width: calc(100vw - 178px);
+    gap: 5px;
+  }
+  .hd-brand-pill { order: 1; padding: 0 8px !important; gap: 6px !important; }
+  .hd-brand-title { font-size: 10px; }
+  .hd-brand-stamps { font-size: 9px; color: var(--marigold); }
+  .hd-guide-pill { order: 2; padding: 0 9px !important; }
+  .hd-quests-chip { order: 3; height: 30px !important; padding: 0 8px !important; gap: 5px !important; }
   .hd-pill-wx-text { display: none; }
-  .hd-guide-pill { padding: 0 10px !important; }
   .hd-sky-pill { padding: 0 9px !important; gap: 6px !important; }
   .hd-dock-btn [class*="Dropdown-module__dropdownArrow"] { display: none !important; }
 
@@ -820,7 +837,7 @@ html, body {
   .hd-dock {
     width: 100%;
     display: grid !important;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
     padding: 4px !important;
   }
@@ -837,7 +854,7 @@ html, body {
   .hd-mini-card { padding: 3px !important; }
   .hd-zoom-col [class*="Button-module__pixelButton"] { width: 40px; min-height: 38px; }
   .hud-drawer {
-    top: calc(var(--gap) + var(--sat) + var(--barH) + 8px);
+    top: calc(var(--gap) + var(--sat) + var(--barH) + 38px);
     bottom: calc(var(--gap) + var(--sab) + 60px);
   }
   .hud-inspector { bottom: calc(var(--gap) + var(--sab) + 60px); }

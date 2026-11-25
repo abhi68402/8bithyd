@@ -6,11 +6,14 @@ import { Chunks, COARSE, COARSE_S, type DetailChunk } from './chunks';
 import { ZONE_COL, type Hit } from '../world/query';
 import { QUALITY, renderDpr } from './quality';
 import type { Camera } from './camera';
-import type { City } from '../world/city';
+import type { City, Place } from '../world/city';
 import { TRAIN_CARS, type Sim, type Pick } from '../sim/sim';
 import type { Events } from '../sim/events';
+import type { CityGame } from '../sim/quests';
 import { CITY_W, CITY_H, WORLD_H, TILE, TX, TY } from '../world/geo';
 import { hash2 } from '../world/rng';
+import { spriteFor } from '../art/sprites';
+import type { Sprite } from '../art/paint';
 import { VW, VH, VOX, VOY, PW, PH, PS, POX, POY, TW_, TH_, TOX, TOY, UM_W, UM_H, UM_COUNT, VEH_ROWS, type Sheets } from '../art/actors';
 
 export type Overlay = 'none' | 'roads' | 'metro' | 'traffic' | 'density' | 'landuse' | 'zones';
@@ -55,6 +58,8 @@ export class Renderer {
   private lmAirport: { x: number; y: number } | null = null;
   private lmUplights: { x: number; y: number }[] = [];
   private lmChai: { x: number; y: number }[] = [];
+  private landmarks: { p: Place; sp: Sprite; ax: number; ay: number; s: number; sortY: number }[] = [];
+  game?: CityGame;
 
   constructor(
     public canvas: HTMLCanvasElement, private city: City, private chunks: Chunks,
@@ -63,6 +68,14 @@ export class Renderer {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
     for (let i = 0; i < this.rainSeed.length; i++) this.rainSeed[i] = Math.random();
     for (const p of city.places) {
+      if (p.sprite) {
+        const sp = spriteFor(p.sprite);
+        const s = p.scale ?? 1;
+        this.landmarks.push({
+          p, sp, ax: sp.ox + (sp.fw - sp.fd) * 8, ay: sp.oy + (sp.fw + sp.fd) * 4, s,
+          sortY: p.y + (sp.fw + sp.fd) * 8 * s,
+        });
+      }
       if (p.id === 'cable-bridge') this.lmCable = p;
       if (p.id === 'necklace-road' || p.id === 'parade-ground') this.lmFlags.push(p);
       if (p.id === 'lumbini') this.lmFountain = p;
@@ -70,6 +83,7 @@ export class Renderer {
       if (UPLIGHT_IDS.has(p.id)) this.lmUplights.push(p);
       if (CHAI_IDS.has(p.id)) this.lmChai.push(p);
     }
+    this.landmarks.sort((a, b) => a.sortY - b.sortY);
     for (const m of city.metro) {
       const p = m.p, len = m.len;
       const at = (s: number, out: number[]) => {
@@ -154,6 +168,7 @@ export class Renderer {
     } else if (mode === 'coarse') {
       drawOverview(ov);
       drawCoarse(false, true);
+      this.drawLandmarks(x0, y0, x1, y1, false, true);
       sim.view.on = false;
     } else {
       const tx0 = Math.max(0, Math.floor(x0 / TILE)), tx1 = Math.min(TX - 1, Math.floor(x1 / TILE));
@@ -290,6 +305,7 @@ export class Renderer {
         if (hi && chunks.structsDone(c)) chunks.bakeHi(c, !cam.dragging && !cam.flying);
         if (c.s) ctx.drawImage(hi && chunks.hiDone(c) ? c.hs! : c.s, c.sx, c.sy, c.s.width, c.s.height);
       }
+      this.drawLandmarks(x0, y0, x1, y1, false, false);
       ctx.imageSmoothingEnabled = false;
 
       // selected building outline
@@ -440,13 +456,14 @@ export class Renderer {
     if (sim.night > 0.03) {
       ctx.globalAlpha = sim.night * 0.9;
       if (mode === 'overview') { ctx.imageSmoothingEnabled = true; ctx.drawImage(chunks.overviewNight, 0, 0, CITY_W, WORLD_H); }
-      else if (mode === 'coarse') drawCoarse(true, false);
+      else if (mode === 'coarse') { drawCoarse(true, false); this.drawLandmarks(x0, y0, x1, y1, true, true); }
       else {
         ctx.imageSmoothingEnabled = cam.zoom < 1;
         for (const c of vis) {
           if (chunks.structsDone(c)) chunks.bakeLights(c);
           if (c.l) ctx.drawImage(c.l, c.sx, c.sy);
         }
+        this.drawLandmarks(x0, y0, x1, y1, true, false);
         ctx.imageSmoothingEnabled = false;
         const veh = sim.veh;
         const blink = ((sim.clock * 7) | 0) & 1;
@@ -549,6 +566,7 @@ export class Renderer {
     }
 
     // atmospheric Deccan haze / mist + wind-slanted rain streaks in screen space
+    if (this.game) this.game.draw(ctx, cam, sim);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (sim.haze > 0.04) {
       ctx.fillStyle = sim.night > 0.5 ? `rgba(38,48,72,${(sim.haze * 0.28).toFixed(3)})` : `rgba(232,228,214,${(sim.haze * 0.26).toFixed(3)})`;
@@ -573,6 +591,20 @@ export class Renderer {
     this.pending = pending;
     this.busy = pending > 0;
     if ((this.frame & 63) === 0) { chunks.evict(Math.max(QUALITY.detailCap, vis.length + 6), QUALITY.coarseCap); chunks.evictHi(QUALITY.hiRes && mode === 'detail' && cam.zoom >= 2 ? vis.length + 2 : 0); }
+  }
+
+  private drawLandmarks(x0: number, y0: number, x1: number, y1: number, lights: boolean, coarse: boolean) {
+    const { ctx, cam } = this;
+    ctx.imageSmoothingEnabled = coarse || cam.zoom < 1;
+    for (const lm of this.landmarks) {
+      const src = lights ? lm.sp.l : lm.sp.c;
+      if (!src) continue;
+      const sc = coarse ? Math.max(0.4, lm.s * 0.5) * COARSE_S : lm.s;
+      const dx = lm.p.x - lm.ax * sc, dy = lm.p.y / 2 - lm.ay * sc;
+      const w = lm.sp.c.width * sc, h = lm.sp.c.height * sc;
+      if (dx + w < x0 - 4 || dx > x1 + 4 || dy + h < y0 - 4 || dy > y1 + 4) continue;
+      ctx.drawImage(src, Math.round(dx), Math.round(dy), w, h);
+    }
   }
 
   private drawMMTS(sheet: HTMLCanvasElement, x0: number, x1: number, y0: number, y1: number, snap: (v: number) => number) {

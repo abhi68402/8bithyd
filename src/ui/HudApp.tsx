@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -22,8 +22,13 @@ import { CITY_W, WORLD_H } from '../world/geo';
 import type { Place } from '../world/city';
 import type { CityEvent } from '../sim/events';
 import type { Festival } from '../sim/festivals';
+import type { CityGameSummary } from '../sim/quests';
 import { ZONE_COL, ZONE_NAMES } from '../world/query';
-import { PixelIcon, type IconName } from './PixelIcon';
+import { EventsDrawer } from './EventsDrawer';
+import { PixelIcon } from './PixelIcon';
+import { PostcardModal } from './PostcardModal';
+import { QuestsChip } from './QuestsChip';
+import { SkyPanel } from './SkyPanel';
 
 export type DrawerTab = '' | 'passport' | 'report' | 'explore';
 
@@ -57,6 +62,7 @@ export interface HudEventItem {
   when: string;
   blurb: string;
   active: boolean;
+  place?: string;
 }
 
 export interface HudWalkItem {
@@ -84,13 +90,20 @@ export interface HudSnapshot {
   weatherHumidity: number | null;
   weatherWind: string;
   weatherClouds: number | null;
+  weatherPrecipMm: number | null;
   weatherAqi: number | null;
+  weatherEuAqi: number | null;
+  weatherPm25: number | null;
+  weatherPm10: number | null;
+  weatherLastUpdatedAt: string | null;
+  weatherAqiLabel: string;
+  weatherAqiColor: string;
+  weatherAqiFailed: boolean;
   weatherFetching: boolean;
   weatherFailed: boolean;
 
   labelsOn: boolean;
   soundOn: boolean;
-  touring: boolean;
   hintGone: boolean;
   overlay: Overlay;
   legend: [string, string][];
@@ -109,7 +122,8 @@ export interface HudSnapshot {
   report: HudReportState | null;
   eventsList: HudEventItem[];
   walksList: HudWalkItem[];
-  postcard: { url: string; caption: string } | null;
+  postcard: { url: string; caption: string; canvas?: HTMLCanvasElement } | null;
+  questsSummary: CityGameSummary;
 }
 
 export interface HudActions {
@@ -131,12 +145,15 @@ export interface HudActions {
   minimapJump: (wx: number, wy: number) => void;
   tapToast: () => void;
   goFestival: () => void;
-  toggleTour: () => void;
   openPostcard: () => void;
   closePostcard: () => void;
   sharePostcard: () => Promise<string>;
   launchEvent: (id: string) => void;
+  stopEvent: (id: string) => void;
   goWalk: (placeId: string) => void;
+  flyToQuest: (wx: number, wy: number, zoom?: number) => void;
+  honkMap: () => void;
+  resetQuests: () => void;
   setMinimapCanvas: (el: HTMLCanvasElement | null) => void;
   setPortraitCanvas: (el: HTMLCanvasElement | null) => void;
 }
@@ -162,46 +179,15 @@ const OVERLAYS: { id: Overlay; label: string; desc: string }[] = [
   { id: 'none', label: 'Off', desc: 'Return to standard city view' },
 ];
 
-const WEATHER_PRESETS: { id: WeatherPreset; label: string; desc: string }[] = [
-  { id: 'live', label: 'Live Hyderabad', desc: 'Real-time Open-Meteo weather' },
-  { id: 'clear', label: 'Clear Sky', desc: 'Sunny Deccan skies & kites' },
-  { id: 'cloudy', label: 'Overcast', desc: 'Drifting cloud cover' },
-  { id: 'haze', label: 'Deccan Haze', desc: 'Soft morning mist & haze' },
-  { id: 'drizzle', label: 'Light Drizzle', desc: 'Umbrellas & gentle rain' },
-  { id: 'rain', label: 'Monsoon Rain', desc: 'Heavy showers & waterlogging' },
-  { id: 'storm', label: 'Thunderstorm', desc: 'Lightning flashes & thunder' },
-];
-
 function closeMenus() {
   document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-}
-
-function skyIconFor(condition: string, minutes: number): IconName {
-  const c = condition.toLowerCase();
-  if (c.includes('thunder')) return 'storm';
-  if (c.includes('rain') || c.includes('drizzle') || c.includes('shower')) return 'rain';
-  if (c.includes('fog') || c.includes('haze')) return 'haze';
-  if (c.includes('cloud') || c.includes('overcast')) return 'cloud';
-  const hr = minutes / 60;
-  return hr < 6 || hr >= 18.5 ? 'moon' : 'sun';
 }
 
 export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ state, actions }) => {
   const [search, setSearch] = useState('');
   const [skyOpen, setSkyOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  const [shareBtnText, setShareBtnText] = useState('SHARE');
   const [mmDown, setMmDown] = useState(false);
-  const skyWrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!skyOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (skyWrapRef.current && !skyWrapRef.current.contains(e.target as Node)) setSkyOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [skyOpen]);
 
   const groupedPlaces = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -229,12 +215,10 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
   };
 
   const activeOvLabel = OVERLAYS.find((o) => o.id === state.overlay)?.label ?? 'Map Views';
-  const activeWeatherLabel = WEATHER_PRESETS.find((w) => w.id === state.weatherPreset)?.label ?? 'Live Hyderabad';
-  const wxIcon = skyIconFor(state.weatherCondition, state.minutes);
 
   return (
     <div id="hud-root">
-      {/* 1. TOP-LEFT: City Identity + Help Guide + Live Pulse */}
+      {/* 1. TOP-LEFT: City Identity + Help Guide + Quests Chip + Live Pulse */}
       <div className="hud-top-left">
         <div className="hd-top-row">
           <Button
@@ -254,6 +238,13 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             <span className="hd-brand-sep" />
             <span className="hd-brand-stamps">{state.stamps.length}/{state.places.length}<span className="hd-stamps-word"> STAMPS</span></span>
           </Button>
+
+          <QuestsChip
+            summary={state.questsSummary}
+            onFlyTo={actions.flyToQuest}
+            onHonk={actions.honkMap}
+            onReset={actions.resetQuests}
+          />
 
           <Button
             className="hd-guide-pill"
@@ -276,165 +267,15 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
         )}
       </div>
 
-      {/* 2. TOP-RIGHT: Live Clock & Weather Capsule + Popover */}
-      <div className="hud-top-right" ref={skyWrapRef}>
-        <Button
-          id="skyBtn"
-          className="hd-sky-pill"
-          bg={skyOpen ? PANEL_ALT : PANEL}
-          textColor={CREAM}
-          borderColor={skyOpen ? MARIGOLD : BORDER}
-          shadow={NO_SHADOW}
-          title="Open Time, Live Weather & Audio settings"
-          onClick={() => setSkyOpen((v) => !v)}
-        >
-          {state.liveOn && <span className="hd-live-dot" title="Live IST Time" />}
-          <span className="hd-pill-time">{state.timeStr}</span>
-          <span className="hd-pill-wx">
-            <PixelIcon name={wxIcon} size={15} color={TEAL} />
-            {state.weatherTemp !== null && <span>{state.weatherTemp}°C</span>}
-            <span className="hd-pill-wx-text">{state.weatherCondition}</span>
-          </span>
-          <span className="hd-pill-caret">{skyOpen ? '▲' : '▼'}</span>
-        </Button>
-
-        {skyOpen && (
-          <Card className="hd-sky-popover" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
-            <div className="hd-pop-head">
-              <div>
-                <div className="hd-pop-time">{state.timeStr}</div>
-                <div className="hd-pop-day hd-ui-text">{state.dayLine}</div>
-              </div>
-              <Button className="hd-small-btn" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={() => setSkyOpen(false)}>
-                <PixelIcon name="close" size={12} />
-              </Button>
-            </div>
-
-            <div className="hd-weather-panel">
-              <div className="hd-weather-main">
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                  <PixelIcon name={wxIcon} size={16} color={TEAL} />
-                  <span>{state.weatherLabel}</span>
-                </span>
-              </div>
-              <div className="hd-weather-grid hd-ui-text">
-                <span>Feels like <b>{state.weatherFeels !== null ? `${state.weatherFeels}°C` : '—'}</b></span>
-                <span>Humidity <b>{state.weatherHumidity !== null ? `${state.weatherHumidity}%` : '—'}</b></span>
-                <span>Wind <b>{state.weatherWind || '—'}</b></span>
-                <span>Air (AQI) <b>{state.weatherAqi !== null ? state.weatherAqi : '—'}</b></span>
-              </div>
-              <div className="hd-weather-controls">
-                <DropdownMenu className="hd-drop-right" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
-                  <DropdownMenuTrigger
-                    bg={state.weatherPreset === 'live' ? '#133131' : MARIGOLD}
-                    textColor={state.weatherPreset === 'live' ? TEAL : MARIGOLD_INK}
-                    borderColor={BORDER}
-                    shadow={NO_SHADOW}
-                  >
-                    Sky: {activeWeatherLabel}
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
-                    <DropdownMenuLabel className="hd-drop-sub">WEATHER MODE</DropdownMenuLabel>
-                    <div className="hd-drop-list">
-                      {WEATHER_PRESETS.map((wp) => (
-                        <DropdownMenuItem key={wp.id}>
-                          <button
-                            type="button"
-                            className={`hd-drop-btn${state.weatherPreset === wp.id ? ' on' : ''}`}
-                            onClick={() => {
-                              actions.setWeatherPreset(wp.id);
-                              closeMenus();
-                            }}
-                          >
-                            <span className="hd-drop-text">
-                              <b>{wp.label}</b>
-                              <small>{wp.desc}</small>
-                            </span>
-                            {state.weatherPreset === wp.id ? <span>●</span> : null}
-                          </button>
-                        </DropdownMenuItem>
-                      ))}
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button className="hd-small-btn" title="Refresh live weather" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={actions.refreshWeather}>
-                  <PixelIcon name="refresh" size={14} color={state.weatherFetching ? MARIGOLD : CREAM} />
-                </Button>
-              </div>
-            </div>
-
-            <div className="hd-section-label">TIME OF DAY {state.liveOn ? '(LIVE IST)' : '(MANUAL)'}</div>
-            <input
-              className={`hd-scrub${state.liveOn ? ' dim' : ''}`}
-              type="range"
-              min={0}
-              max={1439}
-              step={1}
-              value={state.minutes}
-              aria-label="Time of day"
-              onChange={(e) => actions.scrubTime(Number(e.target.value), false)}
-              onMouseUp={(e) => actions.scrubTime(Number((e.target as HTMLInputElement).value), true)}
-              onTouchEnd={(e) => actions.scrubTime(Number((e.target as HTMLInputElement).value), true)}
-            />
-
-            <div className="hd-grid-4" role="group" aria-label="Clock mode">
-              <Button
-                bg={state.liveOn ? ROSE : PANEL_ALT}
-                textColor={CREAM}
-                borderColor={BORDER}
-                shadow={NO_SHADOW}
-                onClick={() => actions.setLive(!state.liveOn)}
-              >
-                LIVE
-              </Button>
-              {[
-                { s: 0, label: 'PAUSE', aria: 'Pause' },
-                { s: 1, label: '1x', aria: 'Normal speed' },
-                { s: 3, label: '3x', aria: 'Fast speed' },
-              ].map((item) => {
-                const active = !state.liveOn && state.speed === item.s;
-                return (
-                  <Button
-                    key={item.s}
-                    aria-label={item.aria}
-                    bg={active ? MARIGOLD : PANEL_ALT}
-                    textColor={active ? MARIGOLD_INK : CREAM}
-                    borderColor={BORDER}
-                    shadow={NO_SHADOW}
-                    onClick={() => actions.setSpeed(item.s)}
-                  >
-                    {item.label}
-                  </Button>
-                );
-              })}
-            </div>
-
-            <div className="hd-grid-2">
-              <Button
-                id="signBtn"
-                bg={state.labelsOn ? MARIGOLD : PANEL_ALT}
-                textColor={state.labelsOn ? MARIGOLD_INK : CREAM}
-                borderColor={BORDER}
-                shadow={NO_SHADOW}
-                onClick={actions.toggleSigns}
-              >
-                <PixelIcon name="signs" size={14} />
-                <span>Labels: {state.labelsOn ? 'On' : 'Off'}</span>
-              </Button>
-              <Button
-                id="soundBtn"
-                bg={state.soundOn ? MARIGOLD : PANEL_ALT}
-                textColor={state.soundOn ? MARIGOLD_INK : CREAM}
-                borderColor={BORDER}
-                shadow={NO_SHADOW}
-                onClick={actions.toggleSound}
-              >
-                <PixelIcon name={state.soundOn ? 'soundOn' : 'soundOff'} size={14} />
-                <span>Sound: {state.soundOn ? 'On' : 'Off'}</span>
-              </Button>
-            </div>
-          </Card>
-        )}
+      {/* 2. TOP-RIGHT: Live Clock, Real Weather & AQI Capsule + Popover */}
+      <div className="hud-top-right">
+        <SkyPanel
+          open={skyOpen}
+          onToggleOpen={() => setSkyOpen((v) => !v)}
+          onClose={() => setSkyOpen(false)}
+          state={state}
+          actions={actions}
+        />
       </div>
 
       {/* 3. TOP-CENTER OVERLAY LEGEND (When a Map View is active) */}
@@ -612,69 +453,16 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             )}
 
             {state.drawer === 'explore' && (
-              <>
-                <div className="hd-drawer-head">
-                  <h2>EVENTS &amp; WALKS</h2>
-                  <Button className="hd-small-btn" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={() => actions.setDrawer('')}>
-                    <PixelIcon name="close" size={12} />
-                  </Button>
-                </div>
-                <p className="hd-sub hd-ui-text">Jump to iconic Hyderabad walks or preview a live festival anytime.</p>
-                <div className="hd-scroll">
-                  {state.festival && (
-                    <div className="hd-event-card" style={{ borderColor: state.festival.now ? MARIGOLD : BORDER }}>
-                      <div className="hd-event-head">
-                        <span style={{ color: MARIGOLD }}>{state.festival.label}</span>
-                      </div>
-                      <b style={{ color: CREAM, fontSize: 13 }}>{state.festival.name}</b>
-                      <p className="hd-event-blurb">{state.festival.blurb}</p>
-                      <Button className="hd-small-btn" bg={MARIGOLD} textColor={MARIGOLD_INK} borderColor={BORDER} shadow={NO_SHADOW} style={{ alignSelf: 'flex-start' }} onClick={actions.goFestival}>
-                        {state.festival.now ? 'Fly There Now' : 'Preview Festival'}
-                      </Button>
-                    </div>
-                  )}
-
-                  <div className="hd-section-label">CURATED CITY WALKS</div>
-                  <div className="hd-walk-grid">
-                    {state.walksList.map((w) => (
-                      <Button
-                        key={w.id}
-                        bg={PANEL_ALT}
-                        textColor={CREAM}
-                        borderColor={BORDER}
-                        shadow={NO_SHADOW}
-                        style={{ flexDirection: 'column', alignItems: 'flex-start', height: 'auto', padding: '8px 9px' }}
-                        onClick={() => actions.goWalk(w.placeId)}
-                      >
-                        <span className="hd-walk-name">{w.name}</span>
-                        <span className="hd-walk-sub">{w.sub}</span>
-                      </Button>
-                    ))}
-                  </div>
-
-                  <div className="hd-section-label">CITY HAPPENINGS</div>
-                  {state.eventsList.map((ev) => (
-                    <div key={ev.id} className="hd-event-card">
-                      <div className="hd-event-head">
-                        <span>{ev.name}</span>
-                        {ev.active ? <span className="hd-tag-live">ON NOW</span> : <span className="hd-event-when">{ev.when}</span>}
-                      </div>
-                      <p className="hd-event-blurb">{ev.blurb}</p>
-                      <Button
-                        className="hd-small-btn"
-                        bg={ev.active ? MARIGOLD : PANEL_ITEM}
-                        textColor={ev.active ? MARIGOLD_INK : CREAM}
-                        borderColor={BORDER}
-                        shadow={NO_SHADOW}
-                        style={{ alignSelf: 'flex-start' }}
-                        onClick={() => actions.launchEvent(ev.id)}
-                      >
-                        {ev.active ? 'Fly There' : 'Preview Event'}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </>
+              <EventsDrawer
+                festival={state.festival}
+                eventsList={state.eventsList}
+                walksList={state.walksList}
+                onClose={() => actions.setDrawer('')}
+                onGoFestival={actions.goFestival}
+                onLaunchEvent={actions.launchEvent}
+                onStopEvent={actions.stopEvent}
+                onGoWalk={actions.goWalk}
+              />
             )}
           </Card>
         </aside>
@@ -804,20 +592,6 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
           </Button>
 
           <Button
-            id="tourBtn"
-            className={`hd-dock-btn${state.touring ? ' active' : ''}`}
-            bg={state.touring ? MARIGOLD : PANEL_ALT}
-            textColor={state.touring ? MARIGOLD_INK : CREAM}
-            borderColor={BORDER}
-            shadow={NO_SHADOW}
-            title="Auto-fly across 12 Hyderabad landmarks"
-            onClick={actions.toggleTour}
-          >
-            <PixelIcon name="tour" size={15} />
-            <span>{state.touring ? 'Stop Tour' : 'Tour'}</span>
-          </Button>
-
-          <Button
             id="postcardBtn"
             className="hd-dock-btn"
             bg={PANEL_ALT}
@@ -884,8 +658,8 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             <p>Drag to pan across 51×46 km of OpenStreetMap Hyderabad. Scroll, pinch, or tap the minimap &amp; <b>+ / -</b> buttons to zoom down to street level.</p>
           </div>
           <div className="hd-guide-item">
-            <b>2. Tap Anything That Moves</b>
-            <p>Zoom in and tap any <b>building</b> for real footprint &amp; metro walk data, or tap <b>autos, buses, metro trains &amp; citizens</b> to inspect or hop on for a live ride.</p>
+            <b>2. Collect Golden Chai &amp; Deccan Pearls</b>
+            <p>Spot floating <b>Chai Cups &amp; Pearls</b> on the map and tap the drifting <b>Hot-Air Balloon</b>! Open the top-left <b>Chai &amp; Quests</b> chip for clues and Explorer Quests.</p>
           </div>
           <div className="hd-guide-item">
             <b>3. Collect Stamps &amp; Check Stats</b>
@@ -893,7 +667,7 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
           </div>
           <div className="hd-guide-item">
             <b>4. Live Time, Weather &amp; Events</b>
-            <p>Tap the top-right <b>Clock &amp; Weather</b> pill to see live Hyderabad weather &amp; AQI, test monsoon storms, scrub time of day, or toggle city <b>Sound</b>. Check <b>Events</b> for festivals &amp; walks.</p>
+            <p>Tap the top-right <b>Clock &amp; Weather</b> pill to see live Hyderabad weather &amp; AQI, preview storms, scrub time of day, or toggle city <b>Sound</b>. Check <b>Events</b> for festivals &amp; walks.</p>
           </div>
           <Button bg={MARIGOLD} textColor={MARIGOLD_INK} borderColor={BORDER} shadow={NO_SHADOW} style={{ width: '100%' }} onClick={() => setGuideOpen(false)}>
             Got It — Back to City
@@ -902,43 +676,11 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
       </Popup>
 
       {/* POSTCARD POPUP */}
-      <Popup
-        isOpen={!!state.postcard}
+      <PostcardModal
+        postcard={state.postcard}
         onClose={actions.closePostcard}
-        title="YOUR POSTCARD"
-        className="hd-postcard-popup"
-        bg={PANEL}
-        baseBg={PANEL}
-        textColor={CREAM}
-        borderColor={BORDER}
-      >
-        {state.postcard && (
-          <div>
-            <img className="hd-postcard-img" src={state.postcard.url} alt={`Postcard: ${state.postcard.caption}`} />
-            <div className="hd-postcard-actions">
-              <a className="hd-btnlink" href={state.postcard.url} download="hyderabad-postcard.png">
-                Save PNG
-              </a>
-              <Button
-                bg={PANEL_ALT}
-                textColor={CREAM}
-                borderColor={BORDER}
-                shadow={NO_SHADOW}
-                onClick={async () => {
-                  const res = await actions.sharePostcard();
-                  setShareBtnText(res);
-                  setTimeout(() => setShareBtnText('Share'), 2200);
-                }}
-              >
-                {shareBtnText === 'SHARE' ? 'Share' : shareBtnText}
-              </Button>
-              <Button bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={actions.closePostcard}>
-                Close
-              </Button>
-            </div>
-          </div>
-        )}
-      </Popup>
+        onShare={actions.sharePostcard}
+      />
     </div>
   );
 };

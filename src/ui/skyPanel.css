@@ -1,0 +1,507 @@
+/* SkyPanel: Flat-2D RetroUI clock, weather & live AQI controls with sideways preset flyout */
+.sp-root {
+  position: relative;
+  pointer-events: auto;
+  z-index: 35;
+}
+
+.sp-ui-text {
+  font-family: var(--ui-sans, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif) !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.4 !important;
+}
+
+/* Enforce strict flat-2D RetroUI overrides scoped to SkyPanel */
+.sp-root [class*="Card-module__pixelCard"],
+.sp-root [class*="Button-module__pixelButton"] {
+  margin: 0 !important;
+  box-shadow: none !important;
+  border-image: none !important;
+  border-style: solid !important;
+  border-width: 2px !important;
+  border-radius: 0 !important;
+  font-family: var(--ui-sans, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif) !important;
+}
+
+.sp-root [class*="Button-module__pixelButton"] {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.1;
+  padding: 0 12px;
+  height: var(--barH, 42px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.sp-root [class*="Button-module__pixelButton"]:hover {
+  border-color: var(--marigold, #f0a030) !important;
+}
+
+.sp-root [class*="Button-module__pixelButton"]:active {
+  transform: translateY(1px);
+}
+
+/* Trigger Pill */
+.sp-pill {
+  height: var(--barH, 42px) !important;
+  padding: 0 13px !important;
+  gap: 10px !important;
+}
+
+.sp-live-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--rose, #e0524c);
+  flex: none;
+}
+
+.sp-pill-time {
+  font-family: 'Silkscreen', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--cream, #f7efe0);
+}
+
+.sp-pill-wx {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--teal, #2dd4bf);
+  font-weight: 700;
+}
+
+.sp-pill-caret {
+  font-size: 10px;
+  color: var(--muted, #d4cce3);
+}
+
+/* Main Popover Card — overflow: visible on desktop so sideways flyout is never clipped */
+.sp-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(352px, calc(100vw - var(--gap, 14px) * 2));
+  padding: 14px !important;
+  background: var(--panel-solid, #1b1626) !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 50;
+  overflow: visible;
+}
+
+.sp-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sp-pop-time {
+  font-family: 'Silkscreen', monospace;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-pop-day {
+  font-size: 12px;
+  color: var(--muted, #d4cce3);
+  margin-top: 3px;
+}
+
+.sp-small-btn {
+  height: 32px !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+}
+
+/* Prominent Live AQI Card */
+.sp-aqi-card {
+  padding: 9px 10px;
+  background: var(--panel-alt, #28213a);
+  border: 2px solid var(--border, #5a4d7a);
+  border-left-width: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sp-aqi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sp-aqi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.sp-aqi-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+
+.sp-aqi-title {
+  font-family: 'Silkscreen', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.sp-aqi-status-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: 'Silkscreen', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted, #d4cce3);
+  cursor: pointer;
+  text-align: left;
+}
+
+.sp-aqi-status-btn.offline {
+  color: var(--rose, #e0524c);
+}
+
+.sp-aqi-tag {
+  font-family: 'Silkscreen', monospace;
+  font-size: 9px;
+  color: var(--muted, #d4cce3);
+  border: 1px solid var(--border, #5a4d7a);
+  padding: 1px 5px;
+  flex: none;
+}
+
+.sp-aqi-pm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted, #d4cce3);
+}
+
+.sp-aqi-pm b {
+  color: var(--cream, #f7efe0);
+  font-weight: 600;
+}
+
+.sp-aqi-sep {
+  opacity: 0.6;
+}
+
+/* Weather Telemetry Panel */
+.sp-weather-panel {
+  padding: 10px;
+  background: var(--panel-alt, #28213a);
+  border: 2px solid var(--border, #5a4d7a);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sp-weather-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sp-weather-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--teal, #2dd4bf);
+  min-width: 0;
+}
+
+.sp-weather-main.offline {
+  color: var(--rose, #e0524c);
+}
+
+.sp-sync-badge {
+  background: #1a1426;
+  border: 1px solid var(--border, #5a4d7a);
+  color: var(--muted, #d4cce3);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  flex: none;
+}
+
+.sp-sync-badge:hover {
+  border-color: var(--marigold, #f0a030);
+  color: var(--cream, #f7efe0);
+}
+
+.sp-sync-badge.offline {
+  border-color: var(--rose, #e0524c);
+  color: var(--rose, #e0524c);
+}
+
+.sp-weather-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 10px;
+  font-size: 12px;
+  color: var(--muted, #d4cce3);
+}
+
+.sp-weather-grid b {
+  color: var(--cream, #f7efe0);
+  font-weight: 600;
+}
+
+.sp-weather-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.sp-sky-trigger {
+  flex: 1;
+  height: 34px !important;
+  justify-content: space-between !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+  min-width: 0;
+}
+
+.sp-sky-trigger-arrow {
+  font-size: 10px;
+  flex: none;
+}
+
+.sp-sky-trigger-label {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-refresh-btn {
+  height: 34px !important;
+  width: 36px;
+  padding: 0 !important;
+  flex: none;
+}
+
+/* Item 4 Fix: Sideways LEFT Flyout on desktop (>= 680px) so controls below are NEVER blocked */
+.sp-flyout {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 0;
+  width: 248px;
+  padding: 10px !important;
+  background: var(--panel-solid, #1b1626) !important;
+  border-color: var(--marigold, #f0a030) !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 55;
+}
+
+.sp-flyout-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.sp-flyout-title {
+  font-family: 'Silkscreen', monospace;
+  font-size: 10px;
+  color: var(--marigold, #f0a030);
+  letter-spacing: 0.05em;
+}
+
+.sp-flyout-close {
+  background: transparent;
+  border: 1px solid var(--border, #5a4d7a);
+  color: var(--cream, #f7efe0);
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 5px;
+  cursor: pointer;
+}
+
+.sp-flyout-close:hover {
+  border-color: var(--marigold, #f0a030);
+  color: var(--marigold, #f0a030);
+}
+
+.sp-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sp-preset-btn {
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  font-family: var(--ui-sans, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif);
+  font-size: 12px;
+  color: var(--cream, #f7efe0);
+  background: var(--panel-alt, #28213a);
+  border: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.sp-preset-btn:hover {
+  background: var(--panel-hover, #352c4d);
+  border-color: var(--border, #5a4d7a);
+}
+
+.sp-preset-btn.on {
+  background: var(--marigold, #f0a030);
+  color: var(--marigold-ink, #1b1626);
+  border-color: var(--marigold, #f0a030);
+}
+
+.sp-preset-btn.on.live-on {
+  background: #133131;
+  color: var(--teal, #2dd4bf);
+  border-color: var(--teal, #2dd4bf);
+}
+
+.sp-preset-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sp-preset-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sp-preset-text b {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sp-preset-text small {
+  font-size: 10.5px;
+  color: var(--muted, #d4cce3);
+  font-weight: 400;
+}
+
+.sp-preset-btn.on:not(.live-on) .sp-preset-text small {
+  color: #3a2b10;
+}
+
+.sp-preset-btn.on.live-on .sp-preset-text small {
+  color: #9bece0;
+}
+
+.sp-preset-dot {
+  flex: none;
+  font-size: 10px;
+}
+
+/* Time Scrubber & Action Grids */
+.sp-section-label {
+  font-family: 'Silkscreen', monospace;
+  font-size: 10px;
+  color: var(--teal, #2dd4bf);
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+.sp-scrub {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--marigold, #f0a030);
+  height: 16px;
+  cursor: pointer;
+}
+
+.sp-scrub.dim {
+  opacity: 0.48;
+}
+
+.sp-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sp-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sp-grid-4 [class*="Button-module__pixelButton"],
+.sp-grid-2 [class*="Button-module__pixelButton"] {
+  width: 100%;
+  height: 34px !important;
+  padding: 0 6px !important;
+  font-size: 11px !important;
+}
+
+/* Mobile (< 680px): inline 2-column preset grid drawer in normal flow so nothing below is ever occluded */
+@media (max-width: 679px) {
+  .sp-pill {
+    padding: 0 9px !important;
+    gap: 6px !important;
+  }
+
+  .sp-pill-wx-text {
+    display: none;
+  }
+
+  .sp-popover {
+    width: min(352px, calc(100vw - var(--gap, 8px) * 2));
+    max-height: calc(100dvh - var(--gap, 8px) * 2 - var(--barH, 38px) - 68px);
+    overflow-y: auto;
+  }
+
+  .sp-flyout {
+    position: static;
+    width: 100%;
+    margin-top: 2px;
+    padding: 8px !important;
+  }
+
+  .sp-preset-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .sp-preset-btn {
+    padding: 6px 7px;
+    gap: 6px;
+  }
+
+  .sp-preset-text small {
+    display: none;
+  }
+}

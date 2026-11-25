@@ -3,13 +3,14 @@
 // throttled simulation/weather/report snapshots to React.
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { PW, PH, PS } from '../art/actors';
+import { PW, PH, PS, VEH_ROWS } from '../art/actors';
 import { spriteFor } from '../art/sprites';
 import type { City, Place } from '../world/city';
 import type { Sim, Pick } from '../sim/sim';
 import { windCompass, type Live, type WeatherPreset } from '../sim/live';
 import { EVENTS, type Events, type CityEvent } from '../sim/events';
 import { festivalsOn, nextFestival, indiaToday, type Festival } from '../sim/festivals';
+import { CityGame, resolveFollowingKind } from '../sim/quests';
 import type { Camera } from '../engine/camera';
 import type { CityAudio } from '../engine/audio';
 import { ROAD_COL, type Renderer, type Overlay } from '../engine/renderer';
@@ -18,6 +19,7 @@ import { CITY_W, WORLD_H, ROAD_NAMES, TILE, TX } from '../world/geo';
 import { pickBuilding, describeBuilding, areaReport, ZONE_NAMES, ZONE_COL, type Hit, type BuildingFacts } from '../world/query';
 import { t, word, up, lang, onLang, PLACE_HI } from './i18n';
 import { ZONE_LEGEND, zonesInfo } from './tools';
+import { generatePostcard, type PostcardData } from './PostcardModal';
 import { HudApp, type DrawerTab, type HudActions, type HudCardState, type HudReportState, type HudSnapshot, type HudWalkItem } from './HudApp';
 
 const STORE = 'hyderabad-days.stamps';
@@ -33,10 +35,6 @@ const LEGENDS: Record<Overlay, [string, string][]> = {
   zones: ZONE_LEGEND,
   landuse: [['#f5cd5a', 'Residential'], ['#5a96f0', 'Commercial'], ['#be6edc', 'Industrial'], ['#5ac86e', 'Parks'], ['#329650', 'Forest'], ['#aac85a', 'Farmland'], ['#c85a50', 'Military'], ['#46aae6', 'Water']],
 };
-const TOUR_IDS = [
-  'charminar', 'mecca-masjid', 'golconda', 'buddha', 'cable-bridge', 'cyber-towers',
-  'birla-mandir', 'chowmahalla', 'falaknuma', 'sec-junction', 'uppal', 'airport',
-];
 const WALKS: HudWalkItem[] = [
   { id: 'old-city', name: 'OLD CITY', sub: 'Charminar & Laad Bazaar', placeId: 'charminar' },
   { id: 'lake', name: 'HUSSAIN SAGAR', sub: 'Buddha & Tank Bund', placeId: 'buddha' },
@@ -80,10 +78,7 @@ export class UI {
   private drawer: DrawerTab = '';
   private hintGone = false;
   private soundOn = false;
-  private touring = false;
-  private tourIdx = 0;
-  private tourTimer = 0;
-  private postcardData: { url: string; caption: string; canvas: HTMLCanvasElement } | null = null;
+  private postcardData: PostcardData | null = null;
   private reportData: HudReportState | null = null;
   private cardData: HudCardState | null = null;
 
@@ -96,11 +91,16 @@ export class UI {
     private live: Live,
     private events: Events,
     private audio?: CityAudio,
+    private game: CityGame = new CityGame(city.places),
   ) {
     try {
       for (const id of JSON.parse(localStorage.getItem(STORE) || '[]')) this.stamps.add(id);
     } catch { /* ignore */ }
     r.stamped = (i) => this.stamps.has(city.places[i].id);
+    this.game.onToast = (msg) => {
+      this.audio?.stampChime();
+      this.toast(msg, null, 3.8);
+    };
 
     this.miniBase = document.createElement('canvas');
     this.miniBase.width = 200;
@@ -197,7 +197,6 @@ export class UI {
       fn?.();
     },
     goFestival: () => this.goFestival(),
-    toggleTour: () => this.toggleTour(),
     openPostcard: () => this.openPostcard(),
     closePostcard: () => this.closePostcard(),
     sharePostcard: () => this.sharePostcard(),
@@ -205,12 +204,34 @@ export class UI {
       const ev = EVENTS.find((e) => e.id === id);
       if (ev) this.goEvent(ev, true);
     },
+    stopEvent: (id) => {
+      this.events.stop(id);
+      this.events.update(0);
+      this.audio?.blip(380);
+      this.renderHud();
+    },
     goWalk: (placeId) => {
       const p = this.city.places.find((q) => q.id === placeId);
       if (p) {
         this.openPlace(p, true);
         if (window.innerWidth < 760) this.setDrawer('');
       }
+    },
+    flyToQuest: (wx, wy, zoom = 2) => {
+      this.stopFollow();
+      if (window.innerWidth < 760) this.setDrawer('');
+      const d = Math.hypot(wx - this.cam.x, wy - this.cam.y);
+      this.cam.flyTo(wx, wy, zoom, Math.min(2.2, 0.9 + d / 9000));
+    },
+    honkMap: () => {
+      this.game.honkAt(this.cam.x, this.cam.y);
+      this.audio?.blip(520, 0.04);
+      this.renderHud();
+    },
+    resetQuests: () => {
+      this.game.resetProgress();
+      this.toast('Chai & Quests progress reset', null, 2.6);
+      this.renderHud();
     },
     setMinimapCanvas: (el) => { this.minimapEl = el; if (el) this.drawMinimap(); },
     setPortraitCanvas: (el) => {
@@ -249,32 +270,6 @@ export class UI {
     return festivalsOn(indiaToday())[0] ?? null;
   }
 
-  private toggleTour() {
-    if (this.touring) this.stopTour();
-    else {
-      this.touring = true;
-      this.tourIdx = 0;
-      this.nextTourStop();
-      this.renderHud();
-    }
-  }
-
-  private stopTour() {
-    if (!this.touring) return;
-    this.touring = false;
-    this.renderHud();
-  }
-
-  private nextTourStop() {
-    const id = TOUR_IDS[this.tourIdx % TOUR_IDS.length];
-    this.tourIdx++;
-    const p = this.city.places.find((q) => q.id === id);
-    if (!p) { this.stopTour(); return; }
-    const d = Math.hypot(p.x - this.cam.x, p.y / 2 - this.cam.y);
-    this.cam.flyTo(p.x, p.y / 2 - (p.lift ?? 30) / 3, 2, Math.min(2.6, 1.1 + d / 8000));
-    this.tourTimer = 5.5;
-  }
-
   private stamp(p: Place) {
     if (this.stamps.has(p.id)) return;
     this.stamps.add(p.id);
@@ -297,6 +292,13 @@ export class UI {
   private tap(wx: number, wy: number) {
     this.hintGone = true;
     const z = this.cam.zoom;
+    const gameHit = this.game.tryTap(wx, wy, z);
+    if (gameHit) {
+      this.audio?.stampChime();
+      this.toast(gameHit, null, 3.8);
+      this.renderHud();
+      return;
+    }
     if (z >= 1) {
       const pick = this.sim.pick(wx, wy * 2 + 6, 12 + 10 / z);
       if (pick) { this.openActor(pick); return; }
@@ -313,6 +315,10 @@ export class UI {
     if (z >= 1.5) {
       const hit = pickBuilding(this.city, wx, wy);
       if (hit) { this.openBuilding(hit); return; }
+    }
+    if (z >= 0.8) {
+      this.game.honkAt(wx, wy);
+      this.audio?.blip(440, 0.02);
     }
     this.closeCard();
   }
@@ -601,59 +607,34 @@ export class UI {
     return bd < 600 / Math.max(0.25, this.cam.zoom) + 300 ? best : null;
   }
 
-  private postcardCaption(): string {
-    const m = Math.floor(this.sim.time);
-    const time = `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-    const l = this.live;
-    const sky = l.weatherLive && l.temp !== null ? `${l.temp}°C ${l.activeDesc}` : this.sim.rain > 0.4 ? 'Monsoon shower' : this.sim.night > 0.6 ? 'City lights' : 'Clear Deccan skies';
-    const where = this.nearestPlace()?.name ?? 'Hyderabad';
-    const fest = this.events.active.find((a) => a.ev.fest)?.ev.name;
-    return [where, time, sky, fest].filter(Boolean).join(' · ');
-  }
-
   private openPostcard() {
-    const src = this.r.canvas;
-    const W = 1200, frame = 36, band = 150;
-    const ar = src.height / src.width;
-    const iw = W - frame * 2, ih = Math.round(iw * Math.min(ar, 0.75));
-    const H = frame + ih + band;
-    const c = document.createElement('canvas');
-    c.width = W; c.height = H;
-    const g = c.getContext('2d')!;
-    g.fillStyle = '#f6ecd2'; g.fillRect(0, 0, W, H);
-    g.fillStyle = '#eadbb8'; g.fillRect(0, H - 8, W, 8);
-    const sh = Math.round(src.width * (ih / iw));
-    const sy = Math.max(0, Math.round((src.height - sh) / 2));
-    g.imageSmoothingEnabled = false;
-    g.drawImage(src, 0, sy, src.width, Math.min(sh, src.height), frame, frame, iw, ih);
-    g.strokeStyle = '#2a1f3a'; g.lineWidth = 4; g.strokeRect(frame - 2, frame - 2, iw + 4, ih + 4);
-    const sx = W - frame - 132, sy2 = frame + 16;
-    g.fillStyle = '#f6ecd2'; g.fillRect(sx, sy2, 116, 132);
-    g.setLineDash([6, 5]); g.strokeStyle = '#d8433b'; g.lineWidth = 3; g.strokeRect(sx + 6, sy2 + 6, 104, 120); g.setLineDash([]);
-    const px = 4, S = '#e8a02a', D = '#2a1f3a';
-    const rect = (a: number, b: number, w: number, h: number, col: string) => { g.fillStyle = col; g.fillRect(sx + 18 + a * px, sy2 + 20 + b * px, w * px, h * px); };
-    rect(0, 3, 3, 17, S); rect(17, 3, 3, 17, S); rect(0, 1, 3, 2, S); rect(17, 1, 3, 2, S);
-    rect(3, 9, 14, 11, S); rect(4, 6, 12, 3, S); rect(8, 4, 4, 2, S);
-    rect(7, 13, 6, 7, D); rect(8, 12, 4, 1, D);
-    g.fillStyle = '#d8433b'; g.font = '700 14px Silkscreen, monospace'; g.textAlign = 'center';
-    g.fillText('HYD', sx + 58, sy2 + 116);
-    const cap = this.postcardCaption();
-    g.textAlign = 'left';
-    g.fillStyle = '#2a1f3a'; g.font = '700 40px Silkscreen, monospace';
-    g.fillText('GREETINGS FROM HYDERABAD', frame, frame + ih + 64);
-    g.fillStyle = '#1f8a8a'; g.font = '20px Silkscreen, monospace';
-    g.fillText(cap.toUpperCase(), frame, frame + ih + 102);
-    g.fillStyle = '#7a6a8a'; g.font = '22px "Noto Sans Telugu", "Noto Sans Devanagari", system-ui, sans-serif'; g.textAlign = 'right';
-    g.fillText('హైదరాబాద్ / हैदराबाद', W - frame, frame + ih + 64);
-    g.font = '14px Silkscreen, monospace';
-    g.fillText(location.host || 'hyderabad days', W - frame, frame + ih + 102);
+    const m = Math.floor(this.sim.time);
+    const timeStr = `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    const l = this.live;
+    const skyStr = l.weatherLive && l.temp !== null
+      ? `${l.temp}°C ${l.activeDesc}${l.aqi !== null ? ` · AQI ${l.aqi}` : ''}`
+      : this.sim.rain > 0.4
+        ? 'Monsoon shower'
+        : this.sim.night > 0.6
+          ? 'City lights'
+          : l.activeDesc || 'Clear Deccan skies';
+    const placeName = this.nearestPlace()?.name ?? 'Hyderabad';
+    const festName = this.events.active.find((a) => a.ev.fest)?.ev.name;
 
-    this.postcardData = { url: c.toDataURL('image/png'), caption: cap, canvas: c };
+    this.postcardData = generatePostcard({
+      canvas: this.r.canvas,
+      placeName,
+      timeStr,
+      skyStr,
+      festName,
+    });
+    this.audio?.blip(660, 0.03);
     this.renderHud();
   }
 
   private closePostcard() {
     if (!this.postcardData) return;
+    if (this.postcardData.url.startsWith('blob:')) URL.revokeObjectURL(this.postcardData.url);
     this.postcardData = null;
     this.renderHud();
   }
@@ -667,8 +648,11 @@ export class UI {
       const file = blob ? new File([blob], 'hyderabad-postcard.png', { type: 'image/png' }) : null;
       if (file && navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], text, url }); return 'SHARED!'; }
       if (navigator.share) { await navigator.share({ text, url }); return 'SHARED!'; }
-      await navigator.clipboard.writeText(`${text} ${url}`);
-      return 'COPIED!';
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(`${text} ${url}`);
+        return 'COPIED!';
+      }
+      return 'USE SAVE';
     } catch {
       return 'USE SAVE';
     }
@@ -711,12 +695,19 @@ export class UI {
       weatherHumidity: l.humidity,
       weatherWind: windText,
       weatherClouds: l.cloudPct,
+      weatherPrecipMm: l.precipMm,
       weatherAqi: l.aqi,
+      weatherEuAqi: l.euAqi,
+      weatherPm25: l.pm25,
+      weatherPm10: l.pm10,
+      weatherLastUpdatedAt: l.lastUpdatedAt,
+      weatherAqiLabel: l.aqiLabel,
+      weatherAqiColor: l.aqiColor,
+      weatherAqiFailed: l.aqiFailed,
       weatherFetching: l.fetching,
       weatherFailed: l.failed,
       labelsOn: this.r.labels,
       soundOn: this.soundOn,
-      touring: this.touring,
       hintGone: this.hintGone,
       overlay: this.r.overlay,
       legend: LEGENDS[this.r.overlay],
@@ -733,9 +724,11 @@ export class UI {
       report: this.reportData,
       eventsList: EVENTS.filter((e) => !e.fest).map((ev) => ({
         id: ev.id, name: ev.name, when: this.events.when(ev), blurb: ev.blurb, active: activeIds.has(ev.id),
+        place: this.city.places.find((p) => p.id === ev.place)?.name,
       })),
       walksList: WALKS,
-      postcard: this.postcardData ? { url: this.postcardData.url, caption: this.postcardData.caption } : null,
+      postcard: this.postcardData ? { url: this.postcardData.url, caption: this.postcardData.caption, canvas: this.postcardData.canvas } : null,
+      questsSummary: this.game.getSummary(this.cam.x, this.cam.y),
     };
   }
 
@@ -758,13 +751,6 @@ export class UI {
   }
 
   update(dt: number) {
-    if (this.touring) {
-      if (this.cam.dragging) this.stopTour();
-      else if (!this.cam.flying) {
-        this.tourTimer -= dt;
-        if (this.tourTimer <= 0) this.nextTourStop();
-      }
-    }
     if (this.follow) {
       if (!this.sim.alive(this.follow)) this.stopFollow();
       else {
@@ -776,6 +762,14 @@ export class UI {
         this.cam.y += (y / 2 - 4 - this.cam.y) * k;
       }
     }
+    this.game.update(
+      dt,
+      this.sim,
+      this.cam,
+      this.stamps.size,
+      resolveFollowingKind(this.follow, this.sim, VEH_ROWS),
+      this.rideMeters,
+    );
     this.acc += dt;
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;

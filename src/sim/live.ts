@@ -5,7 +5,9 @@ import type { Sim } from './sim';
 
 const LAT = 17.385, LON = 78.4867;
 const WEATHER_URL = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m&timezone=Asia%2FKolkata`;
-const AQI_URL = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LON}&current=us_aqi,pm2_5&timezone=Asia%2FKolkata`;
+const AQI_URL = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${LAT}&longitude=${LON}&current=us_aqi,pm2_5,pm10,european_aqi&timezone=Asia%2FKolkata`;
+const REFRESH_MS = 5 * 60e3;
+const RETRY_MS = 60e3;
 
 export type WeatherPreset = 'live' | 'clear' | 'cloudy' | 'haze' | 'drizzle' | 'rain' | 'storm';
 
@@ -43,6 +45,22 @@ export function describeAqi(aqi: number): string {
   return 'Heavy haze';
 }
 
+/** Green / gold / orange / red color on the US AQI scale. */
+export function aqiColorFor(aqi: number | null): string {
+  if (aqi === null) return '#d4cce3';
+  if (aqi <= 50) return '#4cd964';
+  if (aqi <= 100) return '#ffcc33';
+  if (aqi <= 150) return '#ff8c38';
+  return '#ff4d4d';
+}
+
+function formatIstTime(date: Date): string {
+  const ist = new Date(date.getTime() + 5.5 * 3600e3);
+  const hh = String(ist.getUTCHours()).padStart(2, '0');
+  const mm = String(ist.getUTCMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 export const windCompass = (deg: number) => COMPASS[Math.round((deg % 360) / 45) & 7];
 
@@ -74,6 +92,12 @@ const PRESET_MAP: Record<Exclude<WeatherPreset, 'live'>, { desc: string; args: [
   storm: { desc: 'Thunderstorm', args: [1, 0.98, 0.28, true, 0.95] },
 };
 
+async function fetchJson(url: string, signal?: AbortSignal) {
+  const res = await fetch(url, signal ? { signal } : undefined);
+  if (!res.ok) throw new Error(String(res.status));
+  return res.json();
+}
+
 export class Live {
   on = true;
   weatherLive = true;
@@ -84,26 +108,37 @@ export class Live {
   windSpeed: number | null = null;
   windDir: number | null = null;
   cloudPct: number | null = null;
+  precipMm: number | null = null;
   aqi: number | null = null;
+  euAqi: number | null = null;
   pm25: number | null = null;
+  pm10: number | null = null;
+  lastUpdatedAt: string | null = null;
   desc = '';
   failed = false;
+  aqiFailed = false;
   fetching = false;
   private nextFetch = 0;
+  private fetchId = 0;
+  private fetchStartedAt = 0;
+  private abortCtrl: AbortController | null = null;
+  private lastWeatherInput: { code: number; mm: number; clouds: number; windKmh: number; windDeg: number } | null = null;
 
-  constructor(private sim: Sim) {}
+  constructor(private sim: Sim) {
+    // In browser runtime, begin fetching live weather & AQI immediately on boot
+    // regardless of whether the live IST clock starts enabled.
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      this.fetchNow();
+    }
+  }
 
+  /** Toggle live IST clock & sun times independently of live weather sync. */
   set(on: boolean) {
     this.on = on;
+    this.sim.autoWeather = false;
     if (!on) {
       this.sim.sunrise = 6.1;
       this.sim.sunset = 18.3;
-      this.sim.autoWeather = !this.weatherLive;
-    } else {
-      this.weatherLive = true;
-      this.weatherPreset = 'live';
-      this.sim.autoWeather = false;
-      this.nextFetch = 0;
     }
   }
 
@@ -112,6 +147,7 @@ export class Live {
     if (preset === 'live') {
       this.weatherLive = true;
       this.sim.autoWeather = false;
+      this.applyLiveWeather();
       this.nextFetch = 0;
       this.fetchNow();
       return;
@@ -123,51 +159,101 @@ export class Live {
 
   refreshWeather() {
     this.nextFetch = 0;
-    this.fetchNow();
+    this.fetchNow(true);
   }
 
-  private fetchNow() {
-    if (this.fetching) return;
-    this.fetching = true;
-    this.nextFetch = Date.now() + 5 * 60e3;
-    Promise.all([
-      fetch(WEATHER_URL).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
-      fetch(AQI_URL).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    ])
-      .then(([wj, aj]) => {
-        const c = wj.current;
-        this.temp = Math.round(c.temperature_2m);
-        this.feelsLike = c.apparent_temperature != null ? Math.round(c.apparent_temperature) : this.temp;
-        this.humidity = c.relative_humidity_2m != null ? Math.round(c.relative_humidity_2m) : null;
-        this.windSpeed = c.wind_speed_10m != null ? Math.round(c.wind_speed_10m) : null;
-        this.windDir = c.wind_direction_10m != null ? Math.round(c.wind_direction_10m) : null;
-        this.cloudPct = c.cloud_cover != null ? Math.round(c.cloud_cover) : null;
-        this.desc = describeWeather(c.weather_code);
-        this.failed = false;
+  private applyLiveWeather() {
+    if (!this.weatherLive || !this.lastWeatherInput) return;
+    const { code, mm, clouds, windKmh, windDeg } = this.lastWeatherInput;
+    const [rt, cl, hz, st, wx] = mapWeather(code, mm, clouds, windKmh, windDeg, this.aqi);
+    this.sim.setWeather(rt, cl, hz, st, wx);
+  }
 
-        if (aj?.current) {
-          this.aqi = aj.current.us_aqi != null ? Math.round(aj.current.us_aqi) : this.aqi;
-          this.pm25 = aj.current.pm2_5 != null ? Math.round(aj.current.pm2_5 * 10) / 10 : this.pm25;
+  private fetchNow(force = false) {
+    if (typeof fetch !== 'function') return;
+    const now = Date.now();
+    if (this.fetching) {
+      // Avoid duplicate requests when setWeatherPreset('live') + refreshWeather() run together,
+      // while allowing manual retries if an older request is stalled.
+      if (!force || now - this.fetchStartedAt < 2000) return;
+      this.abortCtrl?.abort();
+    }
+
+    const id = ++this.fetchId;
+    this.abortCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const signal = this.abortCtrl?.signal;
+    this.fetching = true;
+    this.fetchStartedAt = now;
+    this.nextFetch = now + REFRESH_MS;
+
+    Promise.allSettled([
+      fetchJson(WEATHER_URL, signal),
+      fetchJson(AQI_URL, signal),
+    ])
+      .then(([wRes, aRes]) => {
+        if (id !== this.fetchId) return;
+
+        let gotAny = false;
+        if (wRes.status === 'fulfilled' && wRes.value?.current) {
+          const c = wRes.value.current;
+          this.temp = Math.round(c.temperature_2m);
+          this.feelsLike = c.apparent_temperature != null ? Math.round(c.apparent_temperature) : this.temp;
+          this.humidity = c.relative_humidity_2m != null ? Math.round(c.relative_humidity_2m) : null;
+          this.windSpeed = c.wind_speed_10m != null ? Math.round(c.wind_speed_10m) : null;
+          this.windDir = c.wind_direction_10m != null ? Math.round(c.wind_direction_10m) : null;
+          this.cloudPct = c.cloud_cover != null ? Math.round(c.cloud_cover) : null;
+          this.precipMm = c.precipitation != null ? Math.round(c.precipitation * 10) / 10 : null;
+          this.desc = describeWeather(c.weather_code);
+          this.failed = false;
+          gotAny = true;
+
+          const clouds = c.cloud_cover != null ? Math.min(1, Math.max(0, c.cloud_cover / 100)) : 0.25;
+          this.lastWeatherInput = {
+            code: c.weather_code,
+            mm: c.precipitation ?? 0,
+            clouds,
+            windKmh: this.windSpeed ?? 10,
+            windDeg: this.windDir ?? 90,
+          };
+        } else {
+          this.failed = true;
         }
 
-        if (this.weatherLive) {
-          const clouds = c.cloud_cover != null ? Math.min(1, Math.max(0, c.cloud_cover / 100)) : 0.25;
-          const [rt, cl, hz, st, wx] = mapWeather(
-            c.weather_code,
-            c.precipitation ?? 0,
-            clouds,
-            this.windSpeed ?? 10,
-            this.windDir ?? 90,
-            this.aqi,
-          );
-          this.sim.setWeather(rt, cl, hz, st, wx);
+        if (aRes.status === 'fulfilled' && aRes.value?.current) {
+          const ac = aRes.value.current;
+          this.aqi = ac.us_aqi != null ? Math.round(ac.us_aqi) : this.aqi;
+          this.euAqi = ac.european_aqi != null ? Math.round(ac.european_aqi) : this.euAqi;
+          this.pm25 = ac.pm2_5 != null ? Math.round(ac.pm2_5 * 10) / 10 : this.pm25;
+          this.pm10 = ac.pm10 != null ? Math.round(ac.pm10 * 10) / 10 : this.pm10;
+          this.aqiFailed = false;
+          gotAny = true;
+        } else {
+          this.aqiFailed = true;
+        }
+
+        if (gotAny) {
+          this.lastUpdatedAt = formatIstTime(new Date());
+          this.applyLiveWeather();
+        }
+
+        if (this.failed || (this.aqiFailed && this.aqi === null)) {
+          this.nextFetch = Date.now() + RETRY_MS;
         }
       })
-      .catch(() => { this.failed = true; this.nextFetch = Date.now() + 60e3; })
-      .finally(() => { this.fetching = false; });
+      .catch(() => {
+        if (id !== this.fetchId) return;
+        this.failed = true;
+        this.aqiFailed = true;
+        this.nextFetch = Date.now() + RETRY_MS;
+      })
+      .finally(() => {
+        if (id !== this.fetchId) return;
+        this.fetching = false;
+        this.abortCtrl = null;
+      });
   }
 
-  /** Call every frame while live. */
+  /** Call every frame while live or syncing Hyderabad weather. */
   tick() {
     const now = new Date();
     if (this.on) {
@@ -177,21 +263,32 @@ export class Live {
       s.weekday = ist.getUTCDay();
       [s.sunrise, s.sunset] = sunTimes(now);
     }
-    if ((this.on || this.weatherLive) && now.getTime() > this.nextFetch) {
+    if ((this.on || this.weatherLive || this.lastUpdatedAt !== null) && now.getTime() >= this.nextFetch) {
       this.fetchNow();
     }
+  }
+
+  get aqiLabel(): string {
+    if (this.aqi !== null) return describeAqi(this.aqi);
+    if ((this.failed || this.aqiFailed) && !this.fetching) return 'Offline · Tap ↻';
+    return 'Fetching...';
+  }
+
+  get aqiColor(): string {
+    return aqiColorFor(this.aqi);
   }
 
   get activeDesc(): string {
     if (this.weatherPreset !== 'live') return PRESET_MAP[this.weatherPreset].desc;
     if (this.desc) return this.desc;
-    return this.sim.rain > 0.4 ? 'Rain' : this.sim.cloudCover > 0.7 ? 'Overcast' : 'Clear';
+    if (this.failed && !this.fetching) return 'Offline · Tap ↻';
+    return 'Fetching...';
   }
 
   get label(): string {
     if (this.weatherPreset !== 'live') return `SKY · ${this.activeDesc.toUpperCase()}`;
-    if (this.failed && this.temp === null) return 'LIVE · WEATHER OFFLINE';
-    if (this.temp === null) return 'LIVE · CHECKING SKY';
+    if (this.failed && this.temp === null && !this.fetching) return 'Offline · Tap ↻';
+    if (this.temp === null) return 'Fetching...';
     const aqiPart = this.aqi !== null ? ` · AQI ${this.aqi}` : '';
     return `LIVE · ${this.temp}°C · ${this.desc.toUpperCase()}${aqiPart}`;
   }

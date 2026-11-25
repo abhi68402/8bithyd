@@ -73,20 +73,22 @@ const places = PLACES.map((p) => {
   let x = G.mx(p.lon), y = G.my(p.lat), snapped = false;
   if (p.match) {
     const re = new RegExp(p.match, 'i');
-    let best = 1500;
+    let best = 600;
     for (const e of nameEls) {
-      const nm = `${e.tags?.name ?? ''}|${e.tags?.['name:en'] ?? ''}`;
+      const t = e.tags ?? {};
+      if (t.highway || t.amenity === 'bus_station' || t.amenity === 'fire_station' || t.railway === 'halt' || t.railway === 'stop' || t.public_transport === 'platform' || t.public_transport === 'stop_position') continue;
+      const nm = `${t.name ?? ''}|${t['name:en'] ?? ''}`;
       if (!re.test(nm)) continue;
       const lat = e.lat ?? e.center?.lat, lon = e.lon ?? e.center?.lon;
       if (lat == null) continue;
-      const d = Math.hypot(G.mx(lon) - G.mx(p.lon), G.my(lat) - G.my(p.lat)) - (e.type === 'node' ? 0 : 150);
+      const d = Math.hypot(G.mx(lon) - G.mx(p.lon), G.my(lat) - G.my(p.lat)) - (e.type === 'node' ? 0 : 120);
       if (d < best) { best = d; x = G.mx(lon); y = G.my(lat); snapped = true; }
     }
   }
   return { ...p, x: R(x), y: R(y), snapped };
 });
 console.log('places snapped to OSM:', places.filter((p) => p.snapped).length, '/', places.length);
-const clearZones = places.filter((p) => p.clear).map((p) => [p.x, p.y, p.clear]);
+const clearZones = places.filter((p) => p.clear || p.sprite).map((p) => [p.x, p.y, Math.max(p.clear || 0, p.sprite ? 28 : 0)]);
 
 // ---------------------------------------------------------------- areas
 const areas = []; // [kind, ...ints]
@@ -303,7 +305,13 @@ for (const f of files.filter((n) => n.startsWith('bld_'))) {
     for (let i = 0; i < p.length; i += 2) { cx += p[i]; cy += p[i + 1]; if (p[i + 1] > maxY) maxY = p[i + 1]; }
     cx /= p.length / 2; cy /= p.length / 2;
     if (!inCity(cx, cy)) continue;
-    if (clearZones.some(([zx, zy, zr]) => Math.hypot(cx - zx, cy - zy) < zr)) continue;
+    if (clearZones.some(([zx, zy, zr]) => {
+      const dc = Math.hypot(cx - zx, cy - zy);
+      if (dc < zr) return true;
+      if (dc > zr + 160) return false;
+      for (let i = 0; i < p.length; i += 2) if (Math.hypot(p[i] - zx, p[i + 1] - zy) < zr) return true;
+      return false;
+    })) continue;
     const t = e.tags ?? {};
     let kind = BK[t.building] ?? (t.amenity === 'place_of_worship' ? 5 : t.amenity ? 6 : t.shop || t.office ? 3 : 0);
     const h1 = hash(e.id), h2 = hash(e.id ^ 0x5bd1e995);
