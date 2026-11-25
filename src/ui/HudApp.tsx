@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -7,11 +7,6 @@ import {
   Bubble,
   Button,
   Card,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
   Input,
   Popup,
   ProgressBar,
@@ -169,25 +164,39 @@ const MARIGOLD_INK = '#1b1626';
 const ROSE = '#e0524c';
 const NO_SHADOW = 'transparent';
 
-const OVERLAYS: { id: Overlay; label: string; desc: string }[] = [
-  { id: 'roads', label: 'Roads', desc: 'Highways, main arteries & lanes' },
-  { id: 'metro', label: 'Metro', desc: 'Red, Blue & Green lines + walk radius' },
-  { id: 'traffic', label: 'Traffic', desc: 'Live road congestion heatmap' },
-  { id: 'zones', label: 'Zones', desc: 'Residential, Commercial & Industrial' },
-  { id: 'density', label: 'Density', desc: 'Built floor area across blocks' },
-  { id: 'landuse', label: 'Land Use', desc: 'Parks, water, campuses & farmland' },
-  { id: 'none', label: 'Off', desc: 'Return to standard city view' },
+const OVERLAYS: { id: Overlay; label: string; desc: string; swatch: string }[] = [
+  { id: 'roads', label: 'Roads', desc: 'All roads', swatch: '#ff8a3c' },
+  { id: 'metro', label: 'Metro', desc: 'Lines & walk', swatch: '#3b78d8' },
+  { id: 'traffic', label: 'Traffic', desc: 'Live flow', swatch: '#4cd964' },
+  { id: 'zones', label: 'Zones', desc: 'R / C / I mix', swatch: '#f0a030' },
+  { id: 'density', label: 'Density', desc: 'Floor area', swatch: '#f5963c' },
+  { id: 'landuse', label: 'Land Use', desc: 'Parks & water', swatch: '#5ac86e' },
+  { id: 'none', label: 'Standard', desc: 'Default view', swatch: '#5a4d7a' },
 ];
-
-function closeMenus() {
-  document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-}
 
 export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ state, actions }) => {
   const [search, setSearch] = useState('');
   const [skyOpen, setSkyOpen] = useState(false);
+  const [viewsOpen, setViewsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [mmDown, setMmDown] = useState(false);
+  const dockWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!viewsOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (dockWrapRef.current && !dockWrapRef.current.contains(e.target as Node)) setViewsOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setViewsOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [viewsOpen]);
 
   const groupedPlaces = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -509,7 +518,52 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
       )}
 
       {/* 5. BOTTOM-CENTER GAME TOOL DOCK */}
-      <div className="hud-dock-wrap">
+      <div className="hud-dock-wrap" ref={dockWrapRef}>
+        {viewsOpen && (
+          <Card
+            className="hd-views-bar"
+            bg={PANEL}
+            textColor={CREAM}
+            borderColor={MARIGOLD}
+            shadowColor={NO_SHADOW}
+          >
+            <div id="viewsTray" role="region" aria-label="Map overlays">
+              <div className="hd-views-head">
+                <span className="hd-views-title">MAP OVERLAYS</span>
+                <button
+                  type="button"
+                  className="hd-views-close"
+                  aria-label="Close map overlays"
+                  onClick={() => setViewsOpen(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="hd-views-row">
+                {OVERLAYS.map((ov) => {
+                  const active = ov.id === 'none' ? state.overlay === 'none' : state.overlay === ov.id;
+                  return (
+                    <button
+                      key={ov.id}
+                      type="button"
+                      className={`hd-view-chip${active ? ' on' : ''}`}
+                      aria-pressed={active}
+                      onClick={() => {
+                        actions.setOverlay(ov.id);
+                        setViewsOpen(false);
+                      }}
+                    >
+                      <span className="hd-view-bar" style={{ background: ov.swatch }} aria-hidden="true" />
+                      <span className="hd-view-label">{ov.label}</span>
+                      <span className="hd-view-desc">{ov.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </Card>
+        )}
+
         <Card className="hd-dock" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
           <Button
             id="passportBtn"
@@ -519,49 +573,30 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             borderColor={BORDER}
             shadow={NO_SHADOW}
             title="View 38 Hyderabad landmarks & stamps"
-            onClick={() => actions.setDrawer('passport')}
+            onClick={() => {
+              setViewsOpen(false);
+              actions.setDrawer('passport');
+            }}
           >
             <PixelIcon name="passport" size={15} />
             <span>Passport</span>
           </Button>
 
-          <DropdownMenu className="hd-drop-up hd-drop-center" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
-            <DropdownMenuTrigger
-              id="viewsBtn"
-              className={`hd-dock-btn${state.overlay !== 'none' ? ' active' : ''}`}
-              bg={state.overlay !== 'none' ? MARIGOLD : PANEL_ALT}
-              textColor={state.overlay !== 'none' ? MARIGOLD_INK : CREAM}
-              borderColor={BORDER}
-              shadow={NO_SHADOW}
-              title="Toggle Metro, Traffic, Roads or Zones map layers"
-            >
-              <PixelIcon name="layers" size={15} />
-              <span>{state.overlay !== 'none' ? activeOvLabel : 'Map Views'}</span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
-              <DropdownMenuLabel className="hd-drop-sub">MAP OVERLAYS</DropdownMenuLabel>
-              <div className="hd-drop-list">
-                {OVERLAYS.map((ov) => (
-                  <DropdownMenuItem key={ov.id}>
-                    <button
-                      type="button"
-                      className={`hd-drop-btn${state.overlay === ov.id && ov.id !== 'none' ? ' on' : ''}`}
-                      onClick={() => {
-                        actions.setOverlay(ov.id);
-                        closeMenus();
-                      }}
-                    >
-                      <span className="hd-drop-text">
-                        <b>{ov.label}</b>
-                        <small>{ov.desc}</small>
-                      </span>
-                      {state.overlay === ov.id && ov.id !== 'none' ? <span>●</span> : null}
-                    </button>
-                  </DropdownMenuItem>
-                ))}
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            id="viewsBtn"
+            className={`hd-dock-btn${viewsOpen || state.overlay !== 'none' ? ' active' : ''}`}
+            bg={viewsOpen || state.overlay !== 'none' ? MARIGOLD : PANEL_ALT}
+            textColor={viewsOpen || state.overlay !== 'none' ? MARIGOLD_INK : CREAM}
+            borderColor={BORDER}
+            shadow={NO_SHADOW}
+            aria-expanded={viewsOpen}
+            aria-controls="viewsTray"
+            title="Toggle Metro, Traffic, Roads or Zones map layers"
+            onClick={() => setViewsOpen((v) => !v)}
+          >
+            <PixelIcon name="layers" size={15} />
+            <span>{state.overlay !== 'none' ? activeOvLabel : 'Map Views'}</span>
+          </Button>
 
           <Button
             id="reportBtn"
@@ -571,7 +606,10 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             borderColor={BORDER}
             shadow={NO_SHADOW}
             title="Inspect neighbourhood population, jobs & demand"
-            onClick={() => actions.setDrawer('report')}
+            onClick={() => {
+              setViewsOpen(false);
+              actions.setDrawer('report');
+            }}
           >
             <PixelIcon name="report" size={15} />
             <span>City Stats</span>
@@ -585,7 +623,10 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             borderColor={BORDER}
             shadow={NO_SHADOW}
             title="Festivals, events & curated city walks"
-            onClick={() => actions.setDrawer('explore')}
+            onClick={() => {
+              setViewsOpen(false);
+              actions.setDrawer('explore');
+            }}
           >
             <PixelIcon name="events" size={15} color={state.festival?.now && state.drawer !== 'explore' ? MARIGOLD : 'currentColor'} />
             <span>Events</span>
@@ -599,7 +640,10 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             borderColor={BORDER}
             shadow={NO_SHADOW}
             title="Capture & share a Greetings from Hyderabad postcard"
-            onClick={actions.openPostcard}
+            onClick={() => {
+              setViewsOpen(false);
+              actions.openPostcard();
+            }}
           >
             <PixelIcon name="camera" size={15} />
             <span>Postcard</span>
