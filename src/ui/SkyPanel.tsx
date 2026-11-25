@@ -51,6 +51,7 @@ export interface SkyPanelState {
   weatherFailed: boolean;
   labelsOn: boolean;
   soundOn: boolean;
+  soundMood?: string;
 }
 
 export interface SkyPanelActions {
@@ -441,6 +442,11 @@ export const SkyPanel: React.FC<SkyPanelProps> = ({
               <span>Sound: {state.soundOn ? 'On' : 'Off'}</span>
             </Button>
           </div>
+          {state.soundOn && state.soundMood && (
+            <div className="sp-music-tag sp-ui-text" title="Procedural weather soundtrack playing">
+              <span>♪ {state.soundMood}</span>
+            </div>
+          )}
         </Card>
       )}
     </div>

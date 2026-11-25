@@ -113,7 +113,14 @@ async function boot() {
         const tp = sim.trainPos(i, 1);
         if (Math.hypot(tp[0] - cam.x, tp[1] / 2 - cam.y) < 350) { nearMetro = true; break; }
       }
-      audio.update(dt, cam.zoom, sim.congestion(2), sim.activity, sim.rain, nearMetro);
+      audio.update(dt, cam.zoom, sim.congestion(2), sim.activity, sim.rain, nearMetro, {
+        rainTarget: sim.rainTarget,
+        clouds: sim.cloudCover,
+        haze: sim.haze,
+        storm: sim.storm,
+        windX: sim.windX,
+        night: sim.night,
+      });
     }
     const work = performance.now() - w0;
     if (stats.record) stats.samples.push(raw, work);

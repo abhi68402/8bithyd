@@ -99,6 +99,7 @@ export interface HudSnapshot {
 
   labelsOn: boolean;
   soundOn: boolean;
+  soundMood: string;
   hintGone: boolean;
   overlay: Overlay;
   legend: [string, string][];

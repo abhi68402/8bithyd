@@ -168,7 +168,19 @@ export class UI {
       this.renderHud();
     },
     toggleSound: () => {
-      if (this.audio) this.soundOn = this.audio.toggle();
+      if (this.audio) {
+        this.soundOn = this.audio.toggle();
+        if (this.soundOn) {
+          this.audio.update(0, this.cam.zoom, this.sim.congestion(2), this.sim.activity, this.sim.rain, false, {
+            rainTarget: this.sim.rainTarget,
+            clouds: this.sim.cloudCover,
+            haze: this.sim.haze,
+            storm: this.sim.storm,
+            windX: this.sim.windX,
+            night: this.sim.night,
+          });
+        }
+      }
       this.renderHud();
     },
     setOverlay: (ov) => {
@@ -717,6 +729,7 @@ export class UI {
       weatherFailed: l.failed,
       labelsOn: this.r.labels,
       soundOn: this.soundOn,
+      soundMood: this.audio?.moodLabel ?? 'Ambient City',
       hintGone: this.hintGone,
       overlay: this.r.overlay,
       legend: LEGENDS[this.r.overlay],
