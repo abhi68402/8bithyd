@@ -183,6 +183,7 @@ export class UI {
     closeCard: () => this.closeCard(),
     cardAction: () => this.cardAction(),
     zoomStep: (dir) => this.cam.zoomStep(dir),
+    zoomToStreet: () => this.cam.flyTo(this.cam.x, this.cam.y, 1.8, 0.7),
     minimapFly: (wx, wy) => {
       this.stopFollow();
       this.cam.flyTo(wx, wy, Math.max(0.5, this.cam.tz), 0.6);

@@ -126,6 +126,7 @@ export interface HudActions {
   closeCard: () => void;
   cardAction: () => void;
   zoomStep: (dir: 1 | -1) => void;
+  zoomToStreet: () => void;
   minimapFly: (wx: number, wy: number) => void;
   minimapJump: (wx: number, wy: number) => void;
   tapToast: () => void;
@@ -141,9 +142,9 @@ export interface HudActions {
 }
 
 const PANEL = '#1b1626';
-const PANEL_ALT = '#272038';
-const PANEL_ITEM = '#231d33';
-const BORDER = '#524570';
+const PANEL_ALT = '#28213a';
+const PANEL_ITEM = '#231c33';
+const BORDER = '#5a4d7a';
 const CREAM = '#f7efe0';
 const TEAL = '#2dd4bf';
 const MARIGOLD = '#f0a030';
@@ -151,24 +152,24 @@ const MARIGOLD_INK = '#1b1626';
 const ROSE = '#e0524c';
 const NO_SHADOW = 'transparent';
 
-const OVERLAYS: { id: Overlay; label: string }[] = [
-  { id: 'roads', label: 'Roads' },
-  { id: 'metro', label: 'Metro' },
-  { id: 'traffic', label: 'Traffic' },
-  { id: 'zones', label: 'Zones' },
-  { id: 'density', label: 'Density' },
-  { id: 'landuse', label: 'Land Use' },
-  { id: 'none', label: 'Off' },
+const OVERLAYS: { id: Overlay; label: string; desc: string }[] = [
+  { id: 'roads', label: 'Roads', desc: 'Highways, main arteries & lanes' },
+  { id: 'metro', label: 'Metro', desc: 'Red, Blue & Green lines + walk radius' },
+  { id: 'traffic', label: 'Traffic', desc: 'Live road congestion heatmap' },
+  { id: 'zones', label: 'Zones', desc: 'Residential, Commercial & Industrial' },
+  { id: 'density', label: 'Density', desc: 'Built floor area across blocks' },
+  { id: 'landuse', label: 'Land Use', desc: 'Parks, water, campuses & farmland' },
+  { id: 'none', label: 'Off', desc: 'Return to standard city view' },
 ];
 
-const WEATHER_PRESETS: { id: WeatherPreset; label: string }[] = [
-  { id: 'live', label: 'Live Hyd' },
-  { id: 'clear', label: 'Clear Sky' },
-  { id: 'cloudy', label: 'Overcast' },
-  { id: 'haze', label: 'Deccan Haze' },
-  { id: 'drizzle', label: 'Drizzle' },
-  { id: 'rain', label: 'Monsoon Rain' },
-  { id: 'storm', label: 'Thunderstorm' },
+const WEATHER_PRESETS: { id: WeatherPreset; label: string; desc: string }[] = [
+  { id: 'live', label: 'Live Hyderabad', desc: 'Real-time Open-Meteo weather' },
+  { id: 'clear', label: 'Clear Sky', desc: 'Sunny Deccan skies & kites' },
+  { id: 'cloudy', label: 'Overcast', desc: 'Drifting cloud cover' },
+  { id: 'haze', label: 'Deccan Haze', desc: 'Soft morning mist & haze' },
+  { id: 'drizzle', label: 'Light Drizzle', desc: 'Umbrellas & gentle rain' },
+  { id: 'rain', label: 'Monsoon Rain', desc: 'Heavy showers & waterlogging' },
+  { id: 'storm', label: 'Thunderstorm', desc: 'Lightning flashes & thunder' },
 ];
 
 function closeMenus() {
@@ -188,6 +189,7 @@ function skyIconFor(condition: string, minutes: number): IconName {
 export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ state, actions }) => {
   const [search, setSearch] = useState('');
   const [skyOpen, setSkyOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [shareBtnText, setShareBtnText] = useState('SHARE');
   const [mmDown, setMmDown] = useState(false);
   const skyWrapRef = useRef<HTMLDivElement>(null);
@@ -226,36 +228,50 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
     return [((e.clientX - b.left) / b.width) * CITY_W, ((e.clientY - b.top) / b.height) * WORLD_H];
   };
 
-  const activeOvLabel = OVERLAYS.find((o) => o.id === state.overlay)?.label ?? 'Views';
-  const activeWeatherLabel = WEATHER_PRESETS.find((w) => w.id === state.weatherPreset)?.label ?? 'Live Hyd';
+  const activeOvLabel = OVERLAYS.find((o) => o.id === state.overlay)?.label ?? 'Map Views';
+  const activeWeatherLabel = WEATHER_PRESETS.find((w) => w.id === state.weatherPreset)?.label ?? 'Live Hyderabad';
   const wxIcon = skyIconFor(state.weatherCondition, state.minutes);
 
   return (
     <div id="hud-root">
-      {/* 1. TOP-LEFT: City Identity + Live Pulse */}
+      {/* 1. TOP-LEFT: City Identity + Help Guide + Live Pulse */}
       <div className="hud-top-left">
-        <Button
-          className="hd-brand-pill"
-          bg={PANEL}
-          textColor={CREAM}
-          borderColor={BORDER}
-          shadow={NO_SHADOW}
-          title="Center on Charminar"
-          onClick={() => {
-            const cm = state.places.find((p) => p.id === 'charminar');
-            if (cm) actions.openPlace(cm);
-          }}
-        >
-          <span className="hd-brand-title">HYDERABAD DAYS</span>
-          <span className="hd-brand-te" lang="te">హైదరాబాద్</span>
-          <span className="hd-brand-sep" />
-          <span className="hd-brand-stamps">{state.stamps.length}/{state.places.length}</span>
-        </Button>
+        <div className="hd-top-row">
+          <Button
+            className="hd-brand-pill"
+            bg={PANEL}
+            textColor={CREAM}
+            borderColor={BORDER}
+            shadow={NO_SHADOW}
+            title="Jump to Charminar"
+            onClick={() => {
+              const cm = state.places.find((p) => p.id === 'charminar');
+              if (cm) actions.openPlace(cm);
+            }}
+          >
+            <span className="hd-brand-title">HYDERABAD <span className="hd-brand-days">DAYS</span></span>
+            <span className="hd-brand-te" lang="te">హైదరాబాద్</span>
+            <span className="hd-brand-sep" />
+            <span className="hd-brand-stamps">{state.stamps.length}/{state.places.length}<span className="hd-stamps-word"> STAMPS</span></span>
+          </Button>
+
+          <Button
+            className="hd-guide-pill"
+            bg={guideOpen ? MARIGOLD : PANEL}
+            textColor={guideOpen ? MARIGOLD_INK : CREAM}
+            borderColor={BORDER}
+            shadow={NO_SHADOW}
+            title="How to play & explore"
+            onClick={() => setGuideOpen(true)}
+          >
+            <span>?<span className="hd-guide-word"> GUIDE</span></span>
+          </Button>
+        </div>
 
         {state.drawer === '' && (
           <Card className="hd-pulse-pill" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
             <span className="led" />
-            <span>{state.pulseText}</span>
+            <span className="hd-ui-text">{state.pulseText}</span>
           </Card>
         )}
       </div>
@@ -269,15 +285,15 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
           textColor={CREAM}
           borderColor={skyOpen ? MARIGOLD : BORDER}
           shadow={NO_SHADOW}
-          title="Live Hyderabad time & weather"
+          title="Open Time, Live Weather & Audio settings"
           onClick={() => setSkyOpen((v) => !v)}
         >
-          {state.liveOn && <span className="hd-live-dot" />}
+          {state.liveOn && <span className="hd-live-dot" title="Live IST Time" />}
           <span className="hd-pill-time">{state.timeStr}</span>
           <span className="hd-pill-wx">
-            <PixelIcon name={wxIcon} size={13} color={TEAL} />
+            <PixelIcon name={wxIcon} size={15} color={TEAL} />
             {state.weatherTemp !== null && <span>{state.weatherTemp}°C</span>}
-            <span className="hd-pill-wx-text">{state.weatherCondition.toUpperCase()}</span>
+            <span className="hd-pill-wx-text">{state.weatherCondition}</span>
           </span>
           <span className="hd-pill-caret">{skyOpen ? '▲' : '▼'}</span>
         </Button>
@@ -287,25 +303,25 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             <div className="hd-pop-head">
               <div>
                 <div className="hd-pop-time">{state.timeStr}</div>
-                <div className="hd-pop-day">{state.dayLine}</div>
+                <div className="hd-pop-day hd-ui-text">{state.dayLine}</div>
               </div>
               <Button className="hd-small-btn" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={() => setSkyOpen(false)}>
-                <PixelIcon name="close" size={11} />
+                <PixelIcon name="close" size={12} />
               </Button>
             </div>
 
             <div className="hd-weather-panel">
               <div className="hd-weather-main">
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <PixelIcon name={wxIcon} size={13} color={TEAL} />
-                  {state.weatherLabel}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                  <PixelIcon name={wxIcon} size={16} color={TEAL} />
+                  <span>{state.weatherLabel}</span>
                 </span>
               </div>
-              <div className="hd-weather-grid">
-                <span>FEELS <b>{state.weatherFeels !== null ? `${state.weatherFeels}°C` : '—'}</b></span>
-                <span>HUMIDITY <b>{state.weatherHumidity !== null ? `${state.weatherHumidity}%` : '—'}</b></span>
-                <span>WIND <b>{state.weatherWind || '—'}</b></span>
-                <span>AQI <b>{state.weatherAqi !== null ? state.weatherAqi : '—'}</b></span>
+              <div className="hd-weather-grid hd-ui-text">
+                <span>Feels like <b>{state.weatherFeels !== null ? `${state.weatherFeels}°C` : '—'}</b></span>
+                <span>Humidity <b>{state.weatherHumidity !== null ? `${state.weatherHumidity}%` : '—'}</b></span>
+                <span>Wind <b>{state.weatherWind || '—'}</b></span>
+                <span>Air (AQI) <b>{state.weatherAqi !== null ? state.weatherAqi : '—'}</b></span>
               </div>
               <div className="hd-weather-controls">
                 <DropdownMenu className="hd-drop-right" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
@@ -315,10 +331,10 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                     borderColor={BORDER}
                     shadow={NO_SHADOW}
                   >
-                    SKY: {activeWeatherLabel.toUpperCase()}
+                    Sky: {activeWeatherLabel}
                   </DropdownMenuTrigger>
                   <DropdownMenuContent bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
-                    <DropdownMenuLabel className="hd-drop-sub">HYDERABAD SKY</DropdownMenuLabel>
+                    <DropdownMenuLabel className="hd-drop-sub">WEATHER MODE</DropdownMenuLabel>
                     <div className="hd-drop-list">
                       {WEATHER_PRESETS.map((wp) => (
                         <DropdownMenuItem key={wp.id}>
@@ -330,7 +346,10 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                               closeMenus();
                             }}
                           >
-                            <span>{wp.label.toUpperCase()}</span>
+                            <span className="hd-drop-text">
+                              <b>{wp.label}</b>
+                              <small>{wp.desc}</small>
+                            </span>
                             {state.weatherPreset === wp.id ? <span>●</span> : null}
                           </button>
                         </DropdownMenuItem>
@@ -339,11 +358,12 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Button className="hd-small-btn" title="Refresh live weather" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={actions.refreshWeather}>
-                  <PixelIcon name="refresh" size={12} color={state.weatherFetching ? MARIGOLD : CREAM} />
+                  <PixelIcon name="refresh" size={14} color={state.weatherFetching ? MARIGOLD : CREAM} />
                 </Button>
               </div>
             </div>
 
+            <div className="hd-section-label">TIME OF DAY {state.liveOn ? '(LIVE IST)' : '(MANUAL)'}</div>
             <input
               className={`hd-scrub${state.liveOn ? ' dim' : ''}`}
               type="range"
@@ -368,9 +388,9 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                 LIVE
               </Button>
               {[
-                { s: 0, label: 'II', aria: 'Pause' },
-                { s: 1, label: '>', aria: 'Normal speed' },
-                { s: 3, label: '>>>', aria: 'Fast speed' },
+                { s: 0, label: 'PAUSE', aria: 'Pause' },
+                { s: 1, label: '1x', aria: 'Normal speed' },
+                { s: 3, label: '3x', aria: 'Fast speed' },
               ].map((item) => {
                 const active = !state.liveOn && state.speed === item.s;
                 return (
@@ -398,8 +418,8 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                 shadow={NO_SHADOW}
                 onClick={actions.toggleSigns}
               >
-                <PixelIcon name="signs" size={12} />
-                <span>SIGNS</span>
+                <PixelIcon name="signs" size={14} />
+                <span>Labels: {state.labelsOn ? 'On' : 'Off'}</span>
               </Button>
               <Button
                 id="soundBtn"
@@ -409,40 +429,40 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                 shadow={NO_SHADOW}
                 onClick={actions.toggleSound}
               >
-                <PixelIcon name={state.soundOn ? 'soundOn' : 'soundOff'} size={12} />
-                <span>SOUND</span>
+                <PixelIcon name={state.soundOn ? 'soundOn' : 'soundOff'} size={14} />
+                <span>Sound: {state.soundOn ? 'On' : 'Off'}</span>
               </Button>
             </div>
           </Card>
         )}
       </div>
 
-      {/* 3. TOP-CENTER OVERLAY LEGEND (Only when a Map Layer is active) */}
+      {/* 3. TOP-CENTER OVERLAY LEGEND (When a Map View is active) */}
       {state.overlay !== 'none' && (
         <div className="hud-legend-dock">
           <Card className="hd-legend-card" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
             <div className="hd-legend-head">
-              <b>{activeOvLabel.toUpperCase()} LAYER</b>
+              <b>{activeOvLabel.toUpperCase()} VIEW</b>
               <Button className="hd-small-btn" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={() => actions.setOverlay('none')}>
-                OFF
+                Turn Off
               </Button>
             </div>
             {state.legend.length > 0 && (
-              <div className="hd-legend-grid">
+              <div className="hd-legend-grid hd-ui-text">
                 {state.legend.map(([col, name]) => (
                   <span key={name}>
                     <i style={{ background: col }} />
-                    {name.toUpperCase()}
+                    {name}
                   </span>
                 ))}
               </div>
             )}
-            {state.viewInfo && <div className="hd-legend-info">{state.viewInfo}</div>}
+            {state.viewInfo && <div className="hd-legend-info hd-ui-text">{state.viewInfo}</div>}
           </Card>
         </div>
       )}
 
-      {/* 4. SINGLE LEFT DRAWER (Passport / Neighbourhood Report / Events & Walks) */}
+      {/* 4. SINGLE LEFT DRAWER (Passport / City Stats / Events & Walks) */}
       {state.drawer !== '' && (
         <aside className="hud-drawer">
           <Card className="hd-drawer-card" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
@@ -451,16 +471,16 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                 <div className="hd-drawer-head">
                   <h2>CITY PASSPORT</h2>
                   <Button className="hd-small-btn" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={() => actions.setDrawer('')}>
-                    <PixelIcon name="close" size={11} />
+                    <PixelIcon name="close" size={12} />
                   </Button>
                 </div>
-                <p className="hd-sub">
-                  Wander near landmarks to stamp them. <b>{state.stamps.length}/{state.places.length}</b>
+                <p className="hd-sub hd-ui-text">
+                  Tap any landmark to fly there and collect its stamp. <b>{state.stamps.length} of {state.places.length} stamped</b>
                 </p>
                 <ProgressBar progress={stampPct} size="sm" color={TEAL} borderColor={BORDER} />
                 <Input
                   type="search"
-                  placeholder="Search places, Telugu, area..."
+                  placeholder="Search landmarks, Telugu or area..."
                   value={search}
                   bg="#130f1c"
                   textColor={CREAM}
@@ -475,16 +495,16 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                         const got = stampSet.has(p.id);
                         return (
                           <button key={p.id} type="button" className={`hd-place-btn${got ? ' got' : ''}`} onClick={() => actions.openPlace(p)}>
-                            <span className="hd-place-st">OK</span>
+                            <span className="hd-place-st">{got ? '✓' : ''}</span>
                             <span className="hd-place-nm">
-                              <span>{p.name}</span>
+                              <b>{p.name}</b>
                               <span lang={secLang}>{sec}</span>
                             </span>
                           </button>
                         );
                       })
                     ) : (
-                      <p className="hd-sub">No place by that name.</p>
+                      <p className="hd-sub hd-ui-text">No landmark found matching "{search}".</p>
                     )
                   ) : (
                     <Accordion collapsible={false} bg={PANEL_ITEM} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
@@ -493,8 +513,9 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                         return (
                           <AccordionItem key={area} value={area} bg={PANEL_ITEM} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
                             <AccordionTrigger>
-                              <span style={{ fontSize: 10, fontWeight: 700, flex: 1 }}>
-                                {state.placeAreaLabel(area)} ({areaGot}/{list.length})
+                              <span className="hd-acc-title">
+                                <span>{state.placeAreaLabel(area)}</span>
+                                <span className="hd-acc-count">{areaGot}/{list.length}</span>
                               </span>
                             </AccordionTrigger>
                             <AccordionContent>
@@ -503,9 +524,9 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                                 const got = stampSet.has(p.id);
                                 return (
                                   <button key={p.id} type="button" className={`hd-place-btn${got ? ' got' : ''}`} onClick={() => actions.openPlace(p)}>
-                                    <span className="hd-place-st">OK</span>
+                                    <span className="hd-place-st">{got ? '✓' : ''}</span>
                                     <span className="hd-place-nm">
-                                      <span>{p.name}</span>
+                                      <b>{p.name}</b>
                                       <span lang={secLang}>{sec}</span>
                                     </span>
                                   </button>
@@ -524,26 +545,35 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             {state.drawer === 'report' && (
               <>
                 <div className="hd-drawer-head">
-                  <h2>NEIGHBOURHOOD</h2>
+                  <h2>NEIGHBOURHOOD STATS</h2>
                   <Button className="hd-small-btn" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={() => actions.setDrawer('')}>
-                    <PixelIcon name="close" size={11} />
+                    <PixelIcon name="close" size={12} />
                   </Button>
                 </div>
                 {!state.report || !state.report.detail ? (
-                  <p className="hd-sub">Zoom in to street level to survey a neighbourhood.</p>
+                  <div className="hd-empty-box">
+                    <p className="hd-ui-text" style={{ margin: 0, color: CREAM }}>
+                      You are zoomed out to the city overview. Zoom into street level to survey population, jobs, and traffic around your camera.
+                    </p>
+                    <Button bg={MARIGOLD} textColor={MARIGOLD_INK} borderColor={BORDER} shadow={NO_SHADOW} onClick={actions.zoomToStreet}>
+                      Zoom In to Survey Here
+                    </Button>
+                  </div>
                 ) : (
                   <div className="hd-scroll">
-                    <p className="hd-sub"><b>AROUND {state.report.suburb.toUpperCase()}</b></p>
+                    <p className="hd-sub hd-ui-text">
+                      Live estimate for buildings around <b>{state.report.suburb}</b>
+                    </p>
                     <dl className="hd-stats-dl">
-                      <div className="hd-stat-box"><dt>POPULATION</dt><dd>{state.report.residents}</dd></div>
-                      <div className="hd-stat-box"><dt>JOBS</dt><dd>{state.report.jobs}</dd></div>
-                      <div className="hd-stat-box"><dt>BUILDINGS</dt><dd>{state.report.buildings}</dd></div>
-                      <div className="hd-stat-box"><dt>TALLEST · ROADS</dt><dd>{state.report.tallest} · {state.report.roadKm}</dd></div>
+                      <div className="hd-stat-box"><dt>Residents</dt><dd>{state.report.residents}</dd></div>
+                      <div className="hd-stat-box"><dt>Local Jobs</dt><dd>{state.report.jobs}</dd></div>
+                      <div className="hd-stat-box"><dt>Buildings</dt><dd>{state.report.buildings}</dd></div>
+                      <div className="hd-stat-box"><dt>Tallest · Roads</dt><dd>{state.report.tallest} · {state.report.roadKm}</dd></div>
                     </dl>
 
+                    <div className="hd-section-label">R / C / I GROWTH DEMAND</div>
                     <div className="hd-demand">
-                      <span className="lbl">DEMAND</span>
-                      {['R', 'C', 'I'].map((letter, idx) => {
+                      {['Res', 'Com', 'Ind'].map((letter, idx) => {
                         const v = state.report!.demand[idx] ?? 0;
                         return (
                           <div key={letter} className="col" title={ZONE_NAMES[idx]}>
@@ -554,15 +584,16 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                       })}
                     </div>
 
+                    <div className="hd-section-label">LAND USE MIX</div>
                     <div className="hd-mix">
                       {[0, 1, 2, 3].map((z) => {
                         const n = state.report!.byZone[z];
-                        return n ? <i key={z} style={{ background: ZONE_COL[z], flex: n }} title={`${ZONE_NAMES[z]} ${n}`} /> : null;
+                        return n ? <i key={z} style={{ background: ZONE_COL[z], flex: n }} title={`${ZONE_NAMES[z]}: ${n}`} /> : null;
                       })}
                     </div>
 
                     {state.report.ratings.map((rt) => (
-                      <div key={rt.label} className="hd-rating-row">
+                      <div key={rt.label} className="hd-rating-row hd-ui-text">
                         <div className="hd-rating-head">
                           <span>{rt.label}</span>
                           <b>{rt.pct}%</b>
@@ -572,7 +603,7 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                     ))}
 
                     <Bubble direction="left" className="hd-advisor-bubble" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER}>
-                      <b style={{ fontFamily: 'Silkscreen, monospace', fontSize: 9, color: MARIGOLD }}>ADVISOR: </b>
+                      <b style={{ color: MARIGOLD }}>City Advisor: </b>
                       {state.report.advisor}
                     </Bubble>
                   </div>
@@ -585,24 +616,25 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                 <div className="hd-drawer-head">
                   <h2>EVENTS &amp; WALKS</h2>
                   <Button className="hd-small-btn" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={() => actions.setDrawer('')}>
-                    <PixelIcon name="close" size={11} />
+                    <PixelIcon name="close" size={12} />
                   </Button>
                 </div>
+                <p className="hd-sub hd-ui-text">Jump to iconic Hyderabad walks or preview a live festival anytime.</p>
                 <div className="hd-scroll">
                   {state.festival && (
                     <div className="hd-event-card" style={{ borderColor: state.festival.now ? MARIGOLD : BORDER }}>
                       <div className="hd-event-head">
                         <span style={{ color: MARIGOLD }}>{state.festival.label}</span>
                       </div>
-                      <b style={{ color: CREAM }}>{state.festival.name}</b>
+                      <b style={{ color: CREAM, fontSize: 13 }}>{state.festival.name}</b>
                       <p className="hd-event-blurb">{state.festival.blurb}</p>
                       <Button className="hd-small-btn" bg={MARIGOLD} textColor={MARIGOLD_INK} borderColor={BORDER} shadow={NO_SHADOW} style={{ alignSelf: 'flex-start' }} onClick={actions.goFestival}>
-                        {state.festival.now ? 'FLY THERE' : 'PREVIEW FESTIVAL'}
+                        {state.festival.now ? 'Fly There Now' : 'Preview Festival'}
                       </Button>
                     </div>
                   )}
 
-                  <p className="hd-sub"><b>CURATED CITY WALKS</b></p>
+                  <div className="hd-section-label">CURATED CITY WALKS</div>
                   <div className="hd-walk-grid">
                     {state.walksList.map((w) => (
                       <Button
@@ -611,21 +643,21 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                         textColor={CREAM}
                         borderColor={BORDER}
                         shadow={NO_SHADOW}
-                        style={{ flexDirection: 'column', alignItems: 'flex-start', height: 'auto', padding: '7px 8px' }}
+                        style={{ flexDirection: 'column', alignItems: 'flex-start', height: 'auto', padding: '8px 9px' }}
                         onClick={() => actions.goWalk(w.placeId)}
                       >
-                        <span style={{ fontSize: 9, fontWeight: 700 }}>{w.name}</span>
-                        <span style={{ fontSize: 8, color: '#b5abc9' }}>{w.sub}</span>
+                        <span className="hd-walk-name">{w.name}</span>
+                        <span className="hd-walk-sub">{w.sub}</span>
                       </Button>
                     ))}
                   </div>
 
-                  <p className="hd-sub"><b>CITY HAPPENINGS</b></p>
+                  <div className="hd-section-label">CITY HAPPENINGS</div>
                   {state.eventsList.map((ev) => (
                     <div key={ev.id} className="hd-event-card">
                       <div className="hd-event-head">
-                        <span>{ev.name.toUpperCase()}</span>
-                        {ev.active ? <span className="hd-tag-live">ON NOW</span> : <span style={{ fontSize: 8, color: '#b5abc9' }}>{ev.when}</span>}
+                        <span>{ev.name}</span>
+                        {ev.active ? <span className="hd-tag-live">ON NOW</span> : <span className="hd-event-when">{ev.when}</span>}
                       </div>
                       <p className="hd-event-blurb">{ev.blurb}</p>
                       <Button
@@ -637,7 +669,7 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                         style={{ alignSelf: 'flex-start' }}
                         onClick={() => actions.launchEvent(ev.id)}
                       >
-                        {ev.active ? 'FLY THERE' : 'PREVIEW NOW'}
+                        {ev.active ? 'Fly There' : 'Preview Event'}
                       </Button>
                     </div>
                   ))}
@@ -662,7 +694,7 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
         <div className="hud-inspector">
           <Card className="hd-card-inner" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
             <Button className="hd-card-close" aria-label="Close" bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={actions.closeCard}>
-              <PixelIcon name="close" size={11} />
+              <PixelIcon name="close" size={12} />
             </Button>
             <canvas ref={actions.setPortraitCanvas} className="hd-portrait" width={96} height={96} />
             <div className="hd-card-body">
@@ -671,7 +703,7 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
               {state.card.sub && <div className="hd-card-sub" lang={state.card.subLang}>{state.card.sub}</div>}
               <p className="hd-card-blurb">{state.card.blurb}</p>
               {state.card.showAction && (
-                <div style={{ marginTop: 4 }}>
+                <div style={{ marginTop: 6 }}>
                   <Button className="hd-small-btn" bg={MARIGOLD} textColor={MARIGOLD_INK} borderColor={BORDER} shadow={NO_SHADOW} onClick={actions.cardAction}>
                     {state.card.actionText}
                   </Button>
@@ -683,8 +715,8 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
       )}
 
       {!state.card && (
-        <div className={`hud-hint${state.hintGone ? ' gone' : ''}`}>
-          DRAG TO EXPLORE · SCROLL TO ZOOM · TAP ANYTHING THAT MOVES
+        <div className={`hud-hint hd-ui-text${state.hintGone ? ' gone' : ''}`}>
+          Drag to pan · Scroll to zoom · Tap any building, car, train, or person
         </div>
       )}
 
@@ -698,10 +730,11 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             textColor={state.drawer === 'passport' ? MARIGOLD_INK : CREAM}
             borderColor={BORDER}
             shadow={NO_SHADOW}
+            title="View 38 Hyderabad landmarks & stamps"
             onClick={() => actions.setDrawer('passport')}
           >
-            <PixelIcon name="passport" size={14} />
-            <span>PASSPORT</span>
+            <PixelIcon name="passport" size={15} />
+            <span>Passport</span>
           </Button>
 
           <DropdownMenu className="hd-drop-up hd-drop-center" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
@@ -712,12 +745,13 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
               textColor={state.overlay !== 'none' ? MARIGOLD_INK : CREAM}
               borderColor={BORDER}
               shadow={NO_SHADOW}
+              title="Toggle Metro, Traffic, Roads or Zones map layers"
             >
-              <PixelIcon name="layers" size={14} />
-              <span>{state.overlay !== 'none' ? activeOvLabel.toUpperCase() : 'LAYERS'}</span>
+              <PixelIcon name="layers" size={15} />
+              <span>{state.overlay !== 'none' ? activeOvLabel : 'Map Views'}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
-              <DropdownMenuLabel className="hd-drop-sub">DATA LAYERS</DropdownMenuLabel>
+              <DropdownMenuLabel className="hd-drop-sub">MAP OVERLAYS</DropdownMenuLabel>
               <div className="hd-drop-list">
                 {OVERLAYS.map((ov) => (
                   <DropdownMenuItem key={ov.id}>
@@ -729,7 +763,10 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                         closeMenus();
                       }}
                     >
-                      <span>{ov.label.toUpperCase()}</span>
+                      <span className="hd-drop-text">
+                        <b>{ov.label}</b>
+                        <small>{ov.desc}</small>
+                      </span>
                       {state.overlay === ov.id && ov.id !== 'none' ? <span>●</span> : null}
                     </button>
                   </DropdownMenuItem>
@@ -745,10 +782,11 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             textColor={state.drawer === 'report' ? MARIGOLD_INK : CREAM}
             borderColor={BORDER}
             shadow={NO_SHADOW}
+            title="Inspect neighbourhood population, jobs & demand"
             onClick={() => actions.setDrawer('report')}
           >
-            <PixelIcon name="report" size={14} />
-            <span>SURVEY</span>
+            <PixelIcon name="report" size={15} />
+            <span>City Stats</span>
           </Button>
 
           <Button
@@ -758,10 +796,11 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             textColor={state.drawer === 'explore' ? MARIGOLD_INK : CREAM}
             borderColor={BORDER}
             shadow={NO_SHADOW}
+            title="Festivals, events & curated city walks"
             onClick={() => actions.setDrawer('explore')}
           >
-            <PixelIcon name="events" size={14} color={state.festival?.now && state.drawer !== 'explore' ? MARIGOLD : 'currentColor'} />
-            <span>EVENTS</span>
+            <PixelIcon name="events" size={15} color={state.festival?.now && state.drawer !== 'explore' ? MARIGOLD : 'currentColor'} />
+            <span>Events</span>
           </Button>
 
           <Button
@@ -771,10 +810,11 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             textColor={state.touring ? MARIGOLD_INK : CREAM}
             borderColor={BORDER}
             shadow={NO_SHADOW}
+            title="Auto-fly across 12 Hyderabad landmarks"
             onClick={actions.toggleTour}
           >
-            <PixelIcon name="tour" size={14} />
-            <span>{state.touring ? 'STOP' : 'TOUR'}</span>
+            <PixelIcon name="tour" size={15} />
+            <span>{state.touring ? 'Stop Tour' : 'Tour'}</span>
           </Button>
 
           <Button
@@ -784,17 +824,18 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             textColor={CREAM}
             borderColor={BORDER}
             shadow={NO_SHADOW}
+            title="Capture & share a Greetings from Hyderabad postcard"
             onClick={actions.openPostcard}
           >
-            <PixelIcon name="camera" size={14} />
-            <span>SNAP</span>
+            <PixelIcon name="camera" size={15} />
+            <span>Postcard</span>
           </Button>
         </Card>
       </div>
 
       {/* 6. BOTTOM-RIGHT MINIMAP & ZOOM */}
       <div className="hud-bottom-right">
-        <div className="hd-credit">Map data © OpenStreetMap contributors</div>
+        <div className="hd-credit hd-ui-text">Map © OpenStreetMap</div>
         <Card className="hd-mini-card" bg={PANEL} textColor={CREAM} borderColor={BORDER} shadowColor={NO_SHADOW}>
           <canvas
             id="minimap"
@@ -826,6 +867,40 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
         </Card>
       </div>
 
+      {/* HOW TO PLAY / GUIDE POPUP */}
+      <Popup
+        isOpen={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        title="HOW TO EXPLORE HYDERABAD"
+        className="hd-guide-popup"
+        bg={PANEL}
+        baseBg={PANEL}
+        textColor={CREAM}
+        borderColor={BORDER}
+      >
+        <div className="hd-guide-body hd-ui-text">
+          <div className="hd-guide-item">
+            <b>1. Explore the Real City</b>
+            <p>Drag to pan across 51×46 km of OpenStreetMap Hyderabad. Scroll, pinch, or tap the minimap &amp; <b>+ / -</b> buttons to zoom down to street level.</p>
+          </div>
+          <div className="hd-guide-item">
+            <b>2. Tap Anything That Moves</b>
+            <p>Zoom in and tap any <b>building</b> for real footprint &amp; metro walk data, or tap <b>autos, buses, metro trains &amp; citizens</b> to inspect or hop on for a live ride.</p>
+          </div>
+          <div className="hd-guide-item">
+            <b>3. Collect Stamps &amp; Check Stats</b>
+            <p>Open <b>Passport</b> to visit all 38 landmarks, switch <b>Map Views</b> (Metro, Traffic, Zones), or open <b>City Stats</b> at street level for neighbourhood demand.</p>
+          </div>
+          <div className="hd-guide-item">
+            <b>4. Live Time, Weather &amp; Events</b>
+            <p>Tap the top-right <b>Clock &amp; Weather</b> pill to see live Hyderabad weather &amp; AQI, test monsoon storms, scrub time of day, or toggle city <b>Sound</b>. Check <b>Events</b> for festivals &amp; walks.</p>
+          </div>
+          <Button bg={MARIGOLD} textColor={MARIGOLD_INK} borderColor={BORDER} shadow={NO_SHADOW} style={{ width: '100%' }} onClick={() => setGuideOpen(false)}>
+            Got It — Back to City
+          </Button>
+        </div>
+      </Popup>
+
       {/* POSTCARD POPUP */}
       <Popup
         isOpen={!!state.postcard}
@@ -842,7 +917,7 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
             <img className="hd-postcard-img" src={state.postcard.url} alt={`Postcard: ${state.postcard.caption}`} />
             <div className="hd-postcard-actions">
               <a className="hd-btnlink" href={state.postcard.url} download="hyderabad-postcard.png">
-                SAVE
+                Save PNG
               </a>
               <Button
                 bg={PANEL_ALT}
@@ -852,13 +927,13 @@ export const HudApp: React.FC<{ state: HudSnapshot; actions: HudActions }> = ({ 
                 onClick={async () => {
                   const res = await actions.sharePostcard();
                   setShareBtnText(res);
-                  setTimeout(() => setShareBtnText('SHARE'), 2200);
+                  setTimeout(() => setShareBtnText('Share'), 2200);
                 }}
               >
-                {shareBtnText}
+                {shareBtnText === 'SHARE' ? 'Share' : shareBtnText}
               </Button>
               <Button bg={PANEL_ALT} textColor={CREAM} borderColor={BORDER} shadow={NO_SHADOW} onClick={actions.closePostcard}>
-                CLOSE
+                Close
               </Button>
             </div>
           </div>
